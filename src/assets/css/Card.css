@@ -1,0 +1,34 @@
+a{
+    text-decoration: none;
+}
+.card, .card .img{
+    width: 200px;
+    height: 300px;
+}
+.card .img img{
+    width: 200px;
+    height: 300px;
+    border-radius: 15px;
+}
+.card p{
+    text-align: center;
+    color: #ebebeb;
+}
+
+@media (max-width:768px) {
+    .card, .card .img{
+        width: 130px;
+        height: 200px;
+    }
+    .card .img img{
+        width: 130px;
+        height: 200px;
+        border-radius: 15px;
+    }
+    .card p{
+        text-align: center;
+        color: #ebebeb;
+        font-size: 13px;
+    }
+    
+}

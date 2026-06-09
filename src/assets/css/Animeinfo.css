@@ -1,0 +1,447 @@
+/* section 1 */
+
+.anime-info {
+  width: 100%;
+  max-width: 1200px;
+  margin-top: 70px;
+  display: flex;
+  align-items: center;
+}
+
+.anime-info .img-div {
+  width: 50%;
+  display: grid;
+  place-items: center;
+  padding-top: 20px;
+}
+
+.anime-info .img-div #image {
+  height: 440px;
+}
+.anime-info .img-div #image img {
+  height: 100%;
+  border-radius: 10px;
+}
+.anime-info .info-div {
+  width: 50%;
+  color: white;
+  display: grid;
+  gap: 1rem;
+}
+.anime-info .info-div h2 {
+  font-size: 30px;
+}
+
+.anime-info .info-div .btns {
+  padding-top: 30px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px;
+}
+.anime-info .info-div .btns button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1.6px solid black;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 17px;
+  color: white;
+  background-color: #000;
+  cursor: pointer;
+}
+.anime-info .load{
+  width: 100%;
+  text-align: center;
+  cursor: progress;
+}
+.anime-info .load p{
+  font-size: 30px;
+  color: white;
+}
+
+/* section 2 */
+
+.anime-details {
+  padding-top: 20px;
+  padding-left: 30px;
+}
+.anime-details nav {
+  padding-bottom: 20px;
+  width: 100%;
+   overflow: scroll;
+    scrollbar-width: none;
+}
+
+.anime-details nav ul {
+  width: fit-content;
+  display: flex;
+  gap: 1rem;
+  border-bottom: 1px solid #636262;
+}
+.anime-details nav ul li {
+  padding: 10px;
+  list-style: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #e6e6e6;
+}
+.anime-details nav ul li a {
+  color: #636262;
+  text-decoration: none;
+}
+
+.anime-details nav ul li a.active {
+  color: #b6b5b5;
+}
+.anime-details nav ul li:has(a.active) {
+  border-bottom: 2px solid #b6b5b5;
+}
+
+/* === overview component === */
+
+.overview {
+  display: flex;
+}
+
+.overview .load{
+  width: 100%;
+  text-align: center;
+  cursor: progress;
+}
+.overview .load p{
+  font-size: 30px;
+  color: white;
+}
+
+/* sub info div */
+
+.overview .info {
+  width: 30vw;
+}
+.overview .info table thead {
+  color: #ffffff;
+  font-size: 20px;
+  padding-bottom: 20px;
+  display: block;
+}
+.overview .info table tbody tr {
+  color: #999799c0;
+}
+.overview .info table tbody tr td {
+  padding-right: 40px;
+  padding-bottom: 15px;
+}
+.overview .info table tbody tr td:last-child {
+  color: #c4c4c4;
+}
+
+/* sub description div */
+.overview .desc {
+  width: 70vw;
+  padding-bottom: 20px;
+}
+.overview .desc h2 {
+  color: #ffffff;
+  font-size: 20px;
+  padding-bottom: 20px;
+}
+.overview .desc p {
+  padding-right: 20px;
+  color: #cac5c5;
+  font-weight: 400;
+}
+
+/* === relations component === */
+
+.relations_div {
+  width: 100%;
+}
+.relations_div .list_title {
+  font-size: 30px;
+  color: #e7e7e7;
+}
+.relations_div .list_data {
+  padding: 20px 4px 20px 50px;
+}
+.relations_div .list_data a {
+  color: #d6d6d6;
+}
+.relations_div .load{
+  width: 100%;
+  text-align: center;
+  cursor: progress;
+  padding-bottom: 20px;
+}
+.relations_div .load p{
+  font-size: 30px;
+  color: white;
+}
+
+/* === characters component === */
+.character-div {
+  width: 100%;
+}
+.character-div h2 {
+  font-size: 30px;
+  color: white;
+}
+
+.character-div .char-cards {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  padding-block: 20px;
+  transition: display 1s ease;
+}
+.character-div .char-cards .charcard {
+  position: relative;
+  cursor: pointer;
+}
+
+.character-div .char-cards .charcard .char_img_div {
+  width: 200px;
+  height: 300px;
+}
+.character-div .char-cards .charcard .char_img_div img {
+  width: 200px;
+  height: 300px;
+  border-radius: 10px;
+}
+.character-div .char-cards .charcard .char-info {
+  position: absolute;
+  color: #e7e7e7;
+  bottom: 5px;
+  left: 10px;
+  text-shadow: 2px 2px 10px #161616cc;
+}
+
+/* loading stat */
+.character-div .char-cards .load{
+  width: 100%;
+  text-align: center;
+  cursor: progress;
+}
+.character-div .char-cards .load p{
+  font-size: 30px;
+  color: white;
+}
+
+/*  before hover */ 
+.charcard  .anime-char {
+opacity: 1;
+display: block;
+}
+
+.charcard .voice-char{
+  opacity: 0;
+  display: none;
+}
+
+/* after hover */
+.charcard:hover  .anime-char{
+  opacity: 0;
+  display: none;
+}
+.charcard:hover .voice-char{
+  opacity: 1;
+  display: block;
+}
+
+/* === staff component === */
+.staff-div{
+  width: 100%;
+}
+.staff-div h2{
+  font-size: 30px;
+  color: white;
+  
+}
+.staff-div .staff-cards{
+  padding-block: 20px;
+
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.staff-div .staff-cards .staff-card{
+  width: 200px;
+  height: fit-content;
+}
+.staff-div .staff-cards .card-img{
+  height: 300px;
+  width: 200px;
+}
+.staff-div .staff-cards .card-img img{
+  height: 300px;
+  width: 200px;
+  border-radius: 10px;
+  object-fit: cover;
+  object-position: top;
+  
+}
+.staff-div .staff-cards .staff-card .staff-info{
+  padding-top: 3px;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  color: rgb(233, 233, 233);
+  font-size: 17px;
+}
+.staff-div .staff-cards .staff-card .staff-info p span{
+  font-size: 15px;
+  font-weight: 400;
+  color: #b6b5b5;
+}
+.staff-div .staff-cards .load{
+  width: 100%;
+  text-align: center;
+  cursor: progress;
+}
+.staff-div .staff-cards .load p{
+  font-size: 30px;
+  color: white;
+}
+.recommendation{
+  width: 100%;
+}
+.recommendation h2{
+  font-size: 30px;
+  color: white;
+  padding-block: 20px;
+}
+.recommendation .recommend-animes{
+  padding-block: 20px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.recommendation .recommend-animes .load{
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-size: 20px;
+}
+.recommendation .recommend-animes .card{
+  height: fit-content;
+}
+
+
+
+
+
+
+
+
+
+/* ====== responsive part ====== */
+
+@media (max-width: 768px) {
+  /* section 1 */
+  .anime-info {
+    flex-direction: column;
+  }
+  .anime-info .img-div {
+    width: 100%;
+  }
+  .anime-info .info-div {
+    width: 100%;
+    padding-top: 20px;
+    padding-left: 30px;
+  }
+  .anime-info .info-div .btns button {
+    padding: 8px;
+    font-size: 13px;
+    color: white;
+    background-color: #000;
+    cursor: pointer;
+  }
+
+  /* section 2 */
+
+  .anime-details {
+    padding-left: 10px;
+  }
+  .anime-details nav ul {
+    gap: 7px;
+   
+  }
+  .anime-details nav ul li {
+    padding-inline: 1px;
+    font-weight: 500;
+    font-size: 17px;
+  }
+
+  /* === overview component === */
+
+  .overview {
+    flex-direction: column;
+  }
+
+  /* sub info div */
+  .overview .info {
+    width: 100%;
+  }
+  .overview .info table tbody tr td:first-child {
+    padding-right: 20vw;
+  }
+
+  /* sub description div */
+  .overview .desc {
+    width: 100%;
+  }
+  .overview .desc p {
+    padding-right: 10px;
+    font-weight: 300;
+  }
+
+
+  /* === character component */
+  .character-div .char-cards .charcard .char_img_div {
+  width: 110px;
+  height: 170px;
+}
+.character-div .char-cards .charcard .char_img_div img {
+  width: 110px;
+  height: 170px;
+
+}
+.character-div .char-cards .charcard .char-info p{
+  font-size: 10px;
+  color: #dfdddd;
+  background-color: #636262;
+   width: fit-content;
+}
+
+/* === staff component === */
+.staff-div .staff-cards .staff-card{
+  width: 120px;
+  height: 250px;
+}
+.staff-div .staff-cards .card-img{
+  height: 180px;
+  width: 120px;
+}
+.staff-div .staff-cards .card-img img{
+  height: 180px;
+  width: 120px;
+
+  
+}
+.staff-div .staff-cards .staff-card .staff-info{
+
+
+  font-size: 12px;
+}
+.staff-div .staff-cards .staff-card .staff-info p span{
+  font-size: 10px;
+
+}
+
+}
