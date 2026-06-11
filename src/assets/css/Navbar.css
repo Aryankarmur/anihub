@@ -72,6 +72,37 @@ nav .menu button {
   cursor: pointer;
 }
 
+nav a{
+  color: white;
+}
+nav .menu{
+  position: relative;
+}
+nav .menu .search_results{
+  position: absolute;
+  top: 50px;
+  background: #4b4b4b;
+  width: fit-content;
+  overflow: scroll;
+  scrollbar-width: none;
+  height: 400px;
+}
+nav .menu .search_results .card_main{
+  display: flex;
+  gap: 15px;
+  padding: 10px;
+  cursor: pointer;
+}
+nav .menu .search_results .card_main .image{
+  width: 80px;
+  height: 100px;
+}
+nav .menu .search_results .card_main .image img{
+  width: 80px;
+  height: 100px;
+  border-radius: 10px;
+}
+
 /* mobile view */
 .mob-menu {
   display: none;

@@ -1,0 +1,56 @@
+.search_main{
+    padding-top: 70px;
+    width: 100%;
+}
+.search_main h2{
+    color: white;
+    font-size: 20px;
+    font-weight: 500;
+    padding: 10px;
+}
+.search_main h2 span{
+    font-weight: 400;
+    font-size: 17px;
+}
+
+.search_main .search_results{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    
+}
+.search_main .search_results .notres{
+    width: 100%;
+    height: 40px;
+    text-align: center;
+    font-size: 30px;
+    color: white;
+}
+.search_main .pages{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding-bottom: 20px;
+    
+}
+.search_main .pages button{
+    padding: 5px;
+    width: 30px ;
+    height: 30px ;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+}
+
+
+
+@media (max-width:1200px) {
+    .search_main .search_results{
+        padding:20px ;
+    }
+    
+}

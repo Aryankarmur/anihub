@@ -8,7 +8,7 @@ import Card from "../component/Card";
 
 const Animeinfo = () => {
   const { id } = useParams();
-  // const id = 21;
+  
 
   const [animefulldata, setAnimefulldata] = useState(null);
   const [animedata_error, setAnimedata_error] = useState("");

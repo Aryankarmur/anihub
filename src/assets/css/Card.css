@@ -1,7 +1,11 @@
 a{
     text-decoration: none;
 }
-.card, .card .img{
+.card{
+   width: 200px;
+    height: fit-content;
+}
+.card .img{
     width: 200px;
     height: 300px;
 }
@@ -9,6 +13,7 @@ a{
     width: 200px;
     height: 300px;
     border-radius: 15px;
+    object-fit: cover;
 }
 .card p{
     text-align: center;
