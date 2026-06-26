@@ -1,14 +1,134 @@
-export const getAnime = async (animepath) => {
+const BASE_URL = "https://api.jikan.moe/v4";
+const CACHE_TTL_MS = 2 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 8000;
+const requestCache = new Map();
+const inFlightRequests = new Map();
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const buildUrl = (path, params = {}) => {
+  const url = new URL(
+    path.startsWith("http") ? path : `${BASE_URL}/${path.replace(/^\/+/, "")}`,
+  );
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  return url.toString();
+};
+
+export const fetchJikan = async (path, options = {}) => {
+  if (!path) {
+    throw new Error("No Jikan path provided");
+  }
+
+  const cacheKey = options.cacheKey || buildUrl(path, options.params || {});
+  const cached = requestCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.timestamp < (options.ttl ?? CACHE_TTL_MS)) {
+    return cached.data;
+  }
+
+  if (inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey);
+  }
+
+  const requestPromise = (async () => {
+    let lastError;
+    const maxRetries = options.retries ?? 1;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        options.timeout ?? DEFAULT_TIMEOUT_MS,
+      );
+
+      try {
+        const response = await fetch(buildUrl(path, options.params || {}), {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Anihub/1.0",
+            ...(options.headers || {}),
+          },
+          signal: controller.signal,
+        });
+
+        if (response.status === 429) {
+          const retryAfter =
+            Number(response.headers.get("retry-after")) || (attempt + 1) * 1100;
+
+          if (attempt === maxRetries) {
+            throw new Error(
+              "Jikan is rate limiting requests. Please wait a moment and try again.",
+            );
+          }
+
+          await wait(retryAfter + 250 * attempt);
+          continue;
+        }
+
+        if (!response.ok) {
+          if (response.status >= 500 && attempt < maxRetries) {
+            await wait(600 * (attempt + 1));
+            continue;
+          }
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        requestCache.set(cacheKey, { data, timestamp: Date.now() });
+        return data;
+      } catch (error) {
+        lastError = error;
+
+        if (error.name === "AbortError") {
+          throw error;
+        }
+
+        if (
+          attempt < maxRetries &&
+          (error.message.includes("429") ||
+            error.message.includes("rate limiting") ||
+            error.message.includes("fetch") ||
+            error.message.includes("504"))
+        ) {
+          await wait(700 * (attempt + 1));
+          continue;
+        }
+
+        break;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    throw lastError || new Error("Request failed");
+  })();
+
+  inFlightRequests.set(cacheKey, requestPromise);
+
+  try {
+    return await requestPromise;
+  } finally {
+    inFlightRequests.delete(cacheKey);
+  }
+};
+
+export const getAnime = async (animepath, options = {}) => {
   if (!animepath) return [];
 
   try {
-    const resp = await fetch(`https://api.jikan.moe/v4/${animepath}`);
-    const result = await resp.json();
+    const result = await fetchJikan(animepath.replace(/^\/+/, ""), options);
+    const data = Array.isArray(result?.data) ? result.data : [];
 
     if (animepath.includes("watch")) {
       return [
         ...new Map(
-          result.data
+          data
             .filter(
               (item) =>
                 item.entry?.images?.webp?.large_image_url !==
@@ -30,7 +150,7 @@ export const getAnime = async (animepath) => {
     if (animepath.includes("recommendations")) {
       return [
         ...new Map(
-          result.data
+          data
             .filter(
               (item) =>
                 item.entry[0]?.images?.webp?.large_image_url !==
@@ -51,7 +171,7 @@ export const getAnime = async (animepath) => {
 
     return [
       ...new Map(
-        result.data.map((item) => [
+        data.map((item) => [
           item.mal_id,
           {
             mal_id: item.mal_id,
@@ -62,9 +182,8 @@ export const getAnime = async (animepath) => {
         ]),
       ).values(),
     ].slice(0, 20);
-
   } catch (error) {
-    console.log(error);
+    console.warn("Anime fetch failed:", error.message);
     return [];
   }
 };

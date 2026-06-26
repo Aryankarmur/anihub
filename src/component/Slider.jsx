@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "../assets/css/Slider.css";
 import { Link } from "react-router-dom";
+import { fetchJikan } from "../api/Fetch";
 
 const Slider = () => {
   const [animeslid, setAnimeslid] = useState(null);
@@ -18,10 +19,11 @@ const Slider = () => {
 
   const seasonAiring = async () => {
     try {
-      const res = await fetch("https://api.jikan.moe/v4/seasons/now?limit=7");
-      const data = await res.json();
+      const data = await fetchJikan("seasons/now", {
+        params: { limit: 7 },
+      });
 
-      setAnimeslid(data.data);
+      setAnimeslid(Array.isArray(data?.data) ? data.data : []);
     } catch (error) {
       console.log(error);
     }

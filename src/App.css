@@ -3,11 +3,48 @@
   padding: 0;
   box-sizing: border-box;
 }
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  max-width: 1200px;
-  background-color: #363636;
+  min-height: 100vh;
+  max-width: 1400px;
   margin: auto;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   font-weight: 500;
-  scroll-behavior: smooth;
+  color: #f5f5f5;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(244, 114, 182, 0.12),
+      transparent 25%
+    ),
+    linear-gradient(135deg, #060816 0%, #111827 50%, #020617 100%);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(244, 114, 182, 0.35);
+  color: white;
+}
+
+body::-webkit-scrollbar {
+  width: 10px;
+}
+
+body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #f472b6, #8b5cf6);
+  border-radius: 999px;
+}
+
+body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
 }

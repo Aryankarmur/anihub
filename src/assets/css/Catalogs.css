@@ -1,0 +1,294 @@
+.catalog_section {
+  padding: 110px 24px 24px;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 20px;
+  color: white;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(244, 114, 182, 0.2),
+      transparent 24%
+    ),
+    linear-gradient(135deg, #060816 0%, #111827 55%, #030711 100%);
+}
+
+.catalog_section .sideBar {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.catalog_section .sideBar h2 {
+  margin: 0;
+  padding-left: 6px;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.catalog_section .sideBar .filters {
+  height: fit-content;
+  max-height: calc(100vh - 170px);
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+  scrollbar-width: none;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);
+}
+
+.catalog_section .sideBar .filters::-webkit-scrollbar {
+  display: none;
+}
+
+.catalog_section .sideBar .filters .dropdown_items label {
+  color: #d4d4d8;
+  font-weight: 400;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.catalog_section
+  .sideBar
+  .filters
+  .dropdown_items
+  label
+  input[type="checkbox"]:checked
+  + span {
+  color: white;
+  font-weight: 600;
+}
+
+.catalog_section .sideBar .filters #years .dropdown_items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.catalog_section .sideBar .filters #years .dropdown_items label select {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(3, 7, 18, 0.75);
+  color: white;
+  padding: 7px 8px;
+}
+
+.catalog_section .sideBar .dropdown_main {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  display: grid;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition:
+    border-color 0.25s ease,
+    transform 0.25s ease;
+}
+
+.catalog_section .sideBar .dropdown_main:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.catalog_section .sideBar .dropdown_main .dropdown_menu {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.catalog_section .sideBar .dropdown_main .dropdown_menu span:first-child {
+  font-weight: 600;
+}
+
+.catalog_section .sideBar .toggleUp {
+  rotate: 180deg;
+  transition: all 0.3s ease;
+}
+
+.catalog_section .sideBar .toggleDown {
+  transition: all 0.3s ease;
+}
+
+.catalog_section .sideBar .show {
+  max-height: 320px;
+  opacity: 1;
+  padding-top: 8px;
+  transform: scaleY(1);
+}
+
+.catalog_section .sideBar .hide {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  transform: scaleY(0.95);
+}
+
+.catalog_section .sideBar .dropdown_main .dropdown_items {
+  width: 100%;
+  display: flex;
+  justify-content: start;
+  align-items: start;
+  flex-direction: column;
+  gap: 8px;
+  line-height: 20px;
+  overflow: auto;
+  scrollbar-width: none;
+  transition: all 0.35s ease;
+  transform-origin: top;
+}
+
+.catalog_section .sideBar .dropdown_main .dropdown_items label {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.catalog_section .content {
+  min-width: 0;
+  overflow: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #6b7280 transparent;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: start;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.catalog_section .content .topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.catalog_section .content .topBar h3 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+.catalog_section .content .topBar p {
+  margin: 0;
+  color: #d1d5db;
+  font-size: 0.92rem;
+}
+
+.catalog_section .content .pageInfo {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(244, 114, 182, 0.16);
+  color: #f9a8d4;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.catalog_section .content .cards {
+  overflow: auto;
+  height: 100%;
+  display: flex;
+  align-items: start;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 4px 6px 12px;
+}
+
+.catalog_section .content .emptyState {
+  width: 100%;
+  padding: 24px;
+  text-align: center;
+  color: #e5e7eb;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.catalog_section .content .pagination {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-bottom: 5px;
+  flex-wrap: wrap;
+}
+
+.catalog_section .content .pagination button {
+  width: fit-content;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+  transition: all 0.25s ease;
+}
+
+.catalog_section .content .pagination button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.catalog_section .content .pagination button.active {
+  background: linear-gradient(135deg, #f472b6, #8b5cf6);
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(139, 92, 246, 0.28);
+}
+
+.catalog_section .content .pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 900px) {
+  .catalog_section {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog_section .sideBar .filters {
+    max-height: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .catalog_section {
+    padding: 100px 14px 20px;
+  }
+
+  .catalog_section .sideBar .filters {
+    grid-template-columns: 1fr;
+    padding-inline: 12px;
+  }
+
+  .catalog_section .content .topBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .catalog_section .content .cards {
+    gap: 16px;
+  }
+}

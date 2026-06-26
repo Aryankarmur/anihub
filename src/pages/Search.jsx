@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import "../assets/css/Search.css";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Card from "../component/Card";
+import { fetchJikan } from "../api/Fetch";
 
 const Search = () => {
   const [searchParams] = useSearchParams();
@@ -16,16 +17,18 @@ const Search = () => {
     const getSearchAnime = async () => {
       try {
         setResultsloading(true);
-        const resp = await fetch(
-          `https://api.jikan.moe/v4/anime?q=${query}&page=${page}`,
-        );
+        setResultsError("");
 
-        if (resp.status !== 200) {
-          throw new Error("Something went wrong! ");
+        if (!query) {
+          setResults([]);
+          return;
         }
 
-        const data = await resp.json();
-        setResults(data);
+        const data = await fetchJikan("anime", {
+          params: { q: query, page },
+        });
+
+        setResults(data || {});
       } catch (error) {
         setResultsError(error.message);
       } finally {
