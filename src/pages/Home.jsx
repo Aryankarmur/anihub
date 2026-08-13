@@ -27,7 +27,7 @@ const Home = () => {
         popularData,
       ] = await Promise.all([
         delayedGetAnime("top/anime?filter=airing", 500),
-        delayedGetAnime("seasons/now", 500),
+        delayedGetAnime("seasons/now", 700),
         delayedGetAnime("recommendations/anime", 1020),
         delayedGetAnime("top/anime?filter=upcoming", 2000),
         delayedGetAnime("top/anime?filter=bypopularity", 3000),
@@ -48,26 +48,39 @@ const Home = () => {
     <>
       <Slider />
 
-      <Cardslider sliderTitle="Top Airing" anime={airing} loading={loading} />
+      <Cardslider 
+      sliderTitle="Top Airing" 
+      anime={airing} 
+      loading={loading} 
+      seeMorePath={"topAiring"}
+      />
 
       <Cardslider
         sliderTitle="New Episodes Releases"
         anime={episode}
         loading={loading}
+        seeMorePath={"newEpisode"}
       />
 
       <Cardslider
         sliderTitle="Recommended"
         anime={recommended}
         loading={loading}
+        seeMorePath={"recommendations"}
       />
 
-      <Cardslider sliderTitle="Upcoming" anime={upcoming} loading={loading} />
+      <Cardslider 
+      sliderTitle="Upcoming" 
+      anime={upcoming} 
+      loading={loading} 
+      seeMorePath={"upcoming"}
+      />
 
       <Cardslider
         sliderTitle="Most Popular"
         anime={popular}
         loading={loading}
+        seeMorePath={"Popular"}
       />
     </>
   );

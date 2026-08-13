@@ -72,7 +72,7 @@ const Search = () => {
     return pages;
   };
 
-  const pages = getPageNumbers(page, results.pagination.last_visible_page);
+  const pages = getPageNumbers(page, results?.pagination?.last_visible_page);
 
   return (
     <section className="search_main">

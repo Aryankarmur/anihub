@@ -19,7 +19,7 @@ const Slider = () => {
 
   const seasonAiring = async () => {
     try {
-      const data = await fetchJikan("seasons/now", {
+      const data = await fetchJikan("/seasons/now", {
         params: { limit: 7 },
       });
 

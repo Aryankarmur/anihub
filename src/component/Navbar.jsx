@@ -95,11 +95,7 @@ const Navbar = () => {
                 Catalog
               </NavLink>
             </li>
-            <li>
-              <NavLink to={"/collections"} onClick={handleNavLinkClick}>
-                Collections
-              </NavLink>
-            </li>
+         
           </ul>
 
           <form onSubmit={handelSearchForm} className="search-form">
@@ -148,7 +144,7 @@ const Navbar = () => {
             ) : null}
           </div>
 
-          <button type="button">Login</button>
+         
         </div>
 
         <div className="mob-menu">
@@ -173,11 +169,7 @@ const Navbar = () => {
                 Catalog
               </NavLink>
             </li>
-            <li>
-              <NavLink to={"/collections"} onClick={handleNavLinkClick}>
-                Collections
-              </NavLink>
-            </li>
+            
             <form onSubmit={handelSearchForm} className="mobile-search-form">
               <input
                 type="search"
@@ -187,7 +179,7 @@ const Navbar = () => {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </form>
-            <button type="button">Login</button>
+            
           </ul>
         </div>
       </section>

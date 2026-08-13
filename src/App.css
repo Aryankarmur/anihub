@@ -19,9 +19,9 @@ body {
     radial-gradient(
       circle at top left,
       rgba(244, 114, 182, 0.12),
-      transparent 25%
+      transparent 100%
     ),
-    linear-gradient(135deg, #060816 0%, #111827 50%, #020617 100%);
+    linear-gradient(135deg, #070816 0%, #111827 50%, #020617 100%);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;

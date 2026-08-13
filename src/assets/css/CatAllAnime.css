@@ -1,0 +1,22 @@
+.anime-main-div {
+    padding-block: 90px;
+}
+.anime-main-div h2{
+    padding: 20px;
+}
+.anime-main-div .anime-list{
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    place-items: center;
+    gap: 20px;
+}
+
+
+@media (max-width:768px) {
+    .anime-main-div .anime-list{
+
+        grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+    }
+    
+}

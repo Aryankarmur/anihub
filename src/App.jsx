@@ -5,7 +5,7 @@ import Search from "./pages/Search";
 import Animeinfo, { Characters, Overview, Relations, Staff } from "./pages/Animeinfo";
 import "./App.css";
 import Catalogs from "./pages/Catalogs";
-import Collections from "./pages/Collections";
+import CatAllAnime from "./pages/CatAllAnime";
 
 const App = () => {
   return (
@@ -22,7 +22,8 @@ const App = () => {
           </Route>
           <Route path="/search" element={<Search/>}/>
           <Route path="/catalog" element={<Catalogs/>}/>
-          <Route path="/collections" element={<Collections/>}/>
+         
+          <Route path={"/allanime/:anime"} element={<CatAllAnime/>}/>
         </Routes>
       </BrowserRouter>
     </>
