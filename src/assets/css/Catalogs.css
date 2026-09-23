@@ -101,17 +101,55 @@
   width: 100%;
   background: var(--bg-3);
   color: var(--text-0);
-  border: 1px solid transparent;
+  border: 1px solid var(--bg-3);
   border-radius: var(--radius-sm);
-  padding: 8px 12px;
+  padding: 10px 14px;
   outline: none;
   font-family: inherit;
+  font-size: 0.9rem;
   margin-bottom: 8px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.catalog_section .sideBar .dropdown_items select:hover {
+  background: var(--bg-1);
 }
 
 .catalog_section .sideBar .dropdown_items select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow);
+  background: var(--bg-1);
+}
+
+.catalog_section .sideBar .dropdown_items.year-inputs {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.catalog_section .sideBar .dropdown_items.year-inputs label {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: transparent;
+  padding: 0;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.catalog_section .sideBar .dropdown_items.year-inputs label select {
+  margin-bottom: 0;
+}
+
+@media (max-width: 375px) {
+  .catalog_section .sideBar .dropdown_items.year-inputs {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
 }
 
 .catalog_section .content {

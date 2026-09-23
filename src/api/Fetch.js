@@ -198,7 +198,8 @@ export const fetchAniListCatalog = async (variables = {}) => {
       $perPage: Int
       $genres: [String]
       $season: MediaSeason
-      $seasonYear: Int
+      $startDateGreater: FuzzyDateInt
+      $startDateLesser: FuzzyDateInt
       $format: MediaFormat
       $status: MediaStatus
       $sort: [MediaSort]
@@ -214,7 +215,8 @@ export const fetchAniListCatalog = async (variables = {}) => {
           type: ANIME
           genre_in: $genres
           season: $season
-          seasonYear: $seasonYear
+          startDate_greater: $startDateGreater
+          startDate_lesser: $startDateLesser
           format: $format
           status: $status
           sort: $sort

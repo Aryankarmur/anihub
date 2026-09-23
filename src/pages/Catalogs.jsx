@@ -10,14 +10,12 @@ const Catalogs = () => {
     isYear: false,
     isSeason: false,
     isGenres: false,
-    isStudios: false,
     isFormat: false,
     isStatus: false,
     isSort: false,
   });
 
   const [genres, setGenres] = useState([]);
-  const [studios, setStudios] = useState([]);
   const [allAnimeData, setAllAnimeData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -26,7 +24,6 @@ const Catalogs = () => {
   const [selectedFilters, setSelectedFilters] = useState({
     seasons: [],
     genres: [],
-    studios: [],
     formats: [],
     status: [],
     years: {
@@ -54,7 +51,11 @@ const Catalogs = () => {
     }
 
     if (selectedFilters.years.from) {
-      params.seasonYear = selectedFilters.years.from;
+      params.startDateGreater = selectedFilters.years.from * 10000;
+    }
+
+    if (selectedFilters.years.to) {
+      params.startDateLesser = (selectedFilters.years.to + 1) * 10000;
     }
 
     if (selectedFilters.seasons.length > 0) {
@@ -125,6 +126,7 @@ const Catalogs = () => {
   }, [
     selectedFilters.genres,
     selectedFilters.years.from,
+    selectedFilters.years.to,
     selectedFilters.seasons,
     selectedFilters.formats,
     selectedFilters.status,
@@ -168,23 +170,13 @@ const Catalogs = () => {
       }
     };
 
-    const fetchStudios = async () => {
-      setStudios([]);
-      const data = await fetchJikan("producers");
-      (data?.data || []).forEach((s) => {
-        setStudios((prev) => [...prev, s?.titles[0]?.title]);
-      });
-    };
-
     fetchGenres();
-    fetchStudios();
   }, []);
 
   useEffect(() => {
     setPagination((prev) => ({ ...prev, current_page: 1 }));
   }, [
     selectedFilters.seasons,
-    selectedFilters.studios,
     selectedFilters.formats,
     selectedFilters.status,
     selectedFilters.genres,
@@ -192,6 +184,22 @@ const Catalogs = () => {
     selectedFilters.years.to,
     sortBy,
   ]);
+
+  const handleYearChange = (type, value) => {
+    setSelectedFilters((prev) => {
+      const newYears = { ...prev.years, [type]: value ? Number(value) : "" };
+      
+      if (newYears.from && newYears.to && newYears.from > newYears.to) {
+        if (type === "from") {
+          newYears.to = newYears.from;
+        } else {
+          newYears.from = newYears.to;
+        }
+      }
+      
+      return { ...prev, years: newYears };
+    });
+  };
 
   const handleFilterChange = (category, value) => {
     setSelectedFilters((prev) => ({
@@ -261,71 +269,39 @@ const Catalogs = () => {
               </span>
             </div>
             <div
-              className={`dropdown_items ${isDropdown.isYear ? "show" : "hide"} `}
+              className={`dropdown_items year-inputs ${isDropdown.isYear ? "show" : "hide"} `}
             >
               <label htmlFor="from">
-                {" "}
-                From :
+                From:
                 <select
                   name="year_from"
                   id="from"
                   value={selectedFilters.years.from || ""}
-                  onChange={(e) =>
-                    setSelectedFilters((prev) => ({
-                      ...prev,
-                      years: {
-                        ...prev.years,
-                        from: e.target.value ? Number(e.target.value) : "",
-                      },
-                    }))
-                  }
+                  onChange={(e) => handleYearChange("from", e.target.value)}
                 >
                   <option value="">Any</option>
-                  {years.map((y) => {
-                    return (
-                      <option value={y} key={y}>
-                        {y}
-                      </option>
-                    );
-                  })}
+                  {years.map((y) => (
+                    <option value={y} key={y}>
+                      {y}
+                    </option>
+                  ))}
                 </select>
               </label>
 
               <label htmlFor="to">
-                {" "}
-                To :
+                To:
                 <select
                   name="year_to"
                   id="to"
                   value={selectedFilters.years.to || ""}
-                  onChange={(e) =>
-                    setSelectedFilters((prev) => ({
-                      ...prev,
-                      years: {
-                        ...prev.years,
-                        to: e.target.value ? Number(e.target.value) : "",
-                      },
-                    }))
-                  }
+                  onChange={(e) => handleYearChange("to", e.target.value)}
                 >
                   <option value="">Any</option>
-                  {selectedFilters.years.from
-                    ? years
-                        .filter((y) => y >= Number(selectedFilters.years.from))
-                        .map((year) => {
-                          return (
-                            <option value={year} key={year}>
-                              {year}
-                            </option>
-                          );
-                        })
-                    : years.map((year) => {
-                        return (
-                          <option value={year} key={year}>
-                            {year}
-                          </option>
-                        );
-                      })}
+                  {years.map((year) => (
+                    <option value={year} key={year}>
+                      {year}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -429,38 +405,6 @@ const Catalogs = () => {
             </div>
           </div>
 
-          <div className="dropdown_main">
-            <div
-              className="dropdown_menu"
-              onClick={() => handleClick("isStudios")}
-            >
-              <span>Studios</span>
-              <span
-                className={`${isDropdown.isStudios ? "toggleUp" : "toggleDown"}`}
-              >
-                {" "}
-                <FaChevronDown />{" "}
-              </span>
-            </div>
-            <div
-              className={`dropdown_items ${isDropdown.isStudios ? "show" : "hide"} `}
-            >
-              {studios.map((s, i) => {
-                return (
-                  <label htmlFor={s} key={i}>
-                    <input
-                      type="checkbox"
-                      name={s}
-                      id={s}
-                      checked={selectedFilters.studios.includes(s)}
-                      onChange={() => handleFilterChange("studios", s)}
-                    />
-                    <span> {s}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
 
           <div
             className="dropdown_main"
