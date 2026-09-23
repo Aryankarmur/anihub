@@ -1,0 +1,154 @@
+.footer {
+  background: var(--bg-1);
+  border-top: 1px solid var(--bg-3);
+  padding: var(--space-7) var(--space-5) var(--space-4);
+  margin-top: auto;
+}
+
+.footer-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.footer-brand, .footer-explore, .footer-about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.footer-logo {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-0);
+  text-decoration: none;
+  width: fit-content;
+}
+
+.footer-logo .accent {
+  color: var(--accent);
+}
+
+.footer-tagline {
+  color: var(--text-1);
+  font-size: 0.95rem;
+  margin: 0;
+  max-width: 300px;
+}
+
+.footer-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.1rem;
+  color: var(--text-0);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.footer-text {
+  color: var(--text-1);
+  line-height: 1.6;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.footer-text a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+.footer-text a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.footer-links li a {
+  color: var(--text-1);
+  text-decoration: none;
+  transition: var(--transition);
+  font-size: 0.95rem;
+  display: inline-block;
+}
+
+.footer-links li a:hover {
+  color: var(--text-0);
+  transform: translateX(4px);
+}
+
+.footer-bottom {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--bg-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-bottom p {
+  color: var(--text-2);
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.footer-bottom-tag {
+  font-style: italic;
+}
+
+/* Tablet Layout */
+@media (max-width: 768px) {
+  .footer-container {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+  }
+}
+
+/* Mobile Layout */
+@media (max-width: 480px) {
+  .footer {
+    padding: var(--space-5) var(--space-4) var(--space-4);
+  }
+
+  .footer-container {
+    grid-template-columns: 1fr;
+    text-align: center;
+    gap: var(--space-6);
+  }
+
+  .footer-brand, .footer-explore, .footer-about {
+    align-items: center;
+  }
+
+  .footer-logo {
+    margin: 0 auto;
+  }
+
+  .footer-tagline {
+    margin: 0 auto;
+  }
+
+  .footer-links li a:hover {
+    transform: translateY(-2px);
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    gap: var(--space-3);
+    text-align: center;
+    justify-content: center;
+  }
+}

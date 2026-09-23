@@ -1,19 +1,26 @@
 .main-slid {
-  margin: auto;
-  display: flex;
+  display: block;
   width: 100%;
   overflow: hidden;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-7);
+  position: relative;
 }
 
+.slider-track {
+  display: flex;
+  width: 100%;
+  transition: transform 0.5s ease-in-out;
+}
 
 .slider {
   width: 100%;
-  height:90vh ;
-  max-height: 560px;
+  height: clamp(400px, 60vh, 600px);
   position: relative;
   cursor: pointer;
-  transition: transform 1.4s ease-in;
-  
+  flex: 0 0 100%;
+  display: block;
+  text-decoration: none;
 }
 
 .slider::after {
@@ -22,72 +29,102 @@
   left: 0;
   bottom: 0;
   width: 100%;
-  height: 40%;
+  height: 60%;
   background: linear-gradient(
     to top,
-    #000000e6,
-    #00000000
-    );
-    z-index: 1;
-  }
-  
-  .slider img {
-    width: 100vw;
-    height: 100%;
-    max-width: 1200px;
-    object-fit: cover;
-    object-position: 0% 30%;
-    display: block;
-   
+    var(--bg-0) 0%,
+    rgba(10, 10, 15, 0.6) 50%,
+    transparent 100%
+  );
+  z-index: 1;
+}
+
+.slider img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  display: block;
 }
 
 .slider .details {
   position: absolute;
-  bottom: 5%;
-  left: 20px;
-  color: #ffffff;
-  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+  bottom: 10%;
+  left: 4%;
+  color: var(--text-0);
   z-index: 2;
+  max-width: 800px;
 }
 
 .slider .details .ani-title {
-  font-size: 30px;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 3rem;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: var(--space-3);
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
 }
+
 .slider .details .ani-info {
   display: flex;
   align-items: center;
   justify-content: start;
-  gap: 1rem;
-  font-size: 16px;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  gap: var(--space-3);
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-1);
 }
 
+.slider .details .ani-info .year {
+  color: var(--accent);
+  font-weight: 600;
+}
 
-/* responsive part */
+.slider-indicators {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  z-index: 10;
+}
+
+.indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.indicator.active {
+  background: var(--accent, #fff);
+}
 
 @media (max-width: 768px) {
+  .main-slid {
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-5);
+  }
+  
   .slider {
-    height: 300px;
-}
-.slider .details {
-    left: 10px;
-    display: grid;
-    gap: .3rem;
-}
-.slider .details .ani-title {
-  font-size: 20px;
-
-}
-.slider .details .ani-info {
-    font-size: 12px;
-}
-
-}
-
-@media (min-width:1200px) {
-  .main-slid{
-      border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
+    height: 400px;
+  }
+  
+  .slider .details {
+    left: 16px;
+    bottom: 24px;
+    right: 16px;
+  }
+  
+  .slider .details .ani-title {
+    font-size: 1.75rem;
+  }
+  
+  .slider .details .ani-info {
+    font-size: 0.9rem;
   }
 }

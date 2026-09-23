@@ -1,6 +1,7 @@
 import Card from "./Card";
 import "../assets/css/Cardslider.css";
 import { Link } from "react-router-dom";
+import SkeletonCard from "./SkeletonCard";
 
 const Cardslider = ({ sliderTitle, anime, loading = false, seeMorePath }) => {
   const placeholderCards = Array.from({ length: 6 }, (_, index) => index);
@@ -13,13 +14,7 @@ const Cardslider = ({ sliderTitle, anime, loading = false, seeMorePath }) => {
       </div>
       <div className={`card-slider ${loading ? "is-loading" : ""}`}>
         {loading
-          ? placeholderCards.map((item) => (
-              <div className="skeleton-card" key={item}>
-                <div className="skeleton-image" />
-                <div className="skeleton-line short" />
-                <div className="skeleton-line" />
-              </div>
-            ))
+          ? placeholderCards.map((item) => <SkeletonCard key={item} />)
           : anime?.map((animeinfo, index) => (
               <Card animeInfo={animeinfo} key={index} />
             ))}

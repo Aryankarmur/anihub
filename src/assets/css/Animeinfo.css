@@ -1,531 +1,498 @@
-/* section 1 */
-
+/* Hero Section */
 .anime-info {
+  position: relative;
   width: 100%;
-  max-width: 1200px;
-  margin-top: 78px;
+  min-height: 50vh;
   display: flex;
   align-items: center;
-  padding: 22px 24px 10px;
-  gap: 28px;
+  justify-content: center;
+  background-size: cover;
+  background-position: center 20%;
+  padding: var(--space-6) var(--space-4);
+}
+
+.hero-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, rgba(10,10,15,0.3) 0%, var(--bg-0) 100%);
+  z-index: 1;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-6);
 }
 
 .anime-info .img-div {
-  width: 46%;
-  display: grid;
-  place-items: center;
+  flex-shrink: 0;
 }
 
-.anime-info .img-div #image {
-  height: 460px;
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.32);
-}
-
-.anime-info .img-div #image img {
-  height: 100%;
-  width: 100%;
+.anime-info .img-div img {
+  width: 220px;
+  aspect-ratio: 3 / 4;
   object-fit: cover;
-  border-radius: 24px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  display: block;
 }
 
 .anime-info .info-div {
-  width: 54%;
-  color: white;
-  display: grid;
-  gap: 1rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-2);
 }
 
 .anime-info .info-div h2 {
-  font-size: 36px;
-  line-height: 1.2;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-0);
+  text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  margin: 0;
 }
 
-.anime-info .info-div p {
-  color: #f3e8ff;
-}
-
-.anime-info .info-div .btns {
-  padding-top: 12px;
+.meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.anime-info .info-div .btns button {
+.meta-pill {
+  background: var(--bg-2);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-1);
   display: flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 15px;
+}
+
+.anime-info .info-div .btns {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.anime-info .info-div .btns button {
+  background: var(--accent);
   color: white;
-  background: linear-gradient(135deg, #111827, #1f2937);
-  cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: var(--transition);
+}
+
+.anime-info .info-div .btns button:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+}
+
+.anime-info .info-div .btns #tocollec {
+  background: var(--bg-2);
+}
+.anime-info .info-div .btns #tocollec:hover {
+  background: var(--bg-3);
 }
 
 .hero-loader {
+  position: relative;
+  z-index: 2;
   width: 100%;
-  padding: 30px 0;
 }
 
 .load-state {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 24px;
-  color: #fff;
-  text-align: center;
+  padding: var(--space-5);
+  color: var(--text-1);
 }
 
-.load-state p {
-  color: #f1f5f9;
+.error-state p {
+  color: var(--danger);
 }
 
-.load-state.error-state p {
-  color: #fda4af;
-}
-
-.spinner-ring {
-  width: 38px;
-  height: 38px;
-  border: 3px solid rgba(255, 255, 255, 0.18);
-  border-top-color: #f472b6;
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-
-.block-state {
-  min-height: 140px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px dashed rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* section 2 */
-
+/* Tabs Section */
 .anime-details {
-  padding: 20px 24px 30px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
 .anime-details nav {
-  padding-bottom: 16px;
-  width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
 }
 
-.anime-details nav ul {
-  width: fit-content;
-  display: flex;
-  gap: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+.anime-details nav {
+  position: sticky;
+  top: 64px;
+  z-index: 100;
+  background: var(--bg-0);
+  padding: var(--space-3) 0;
+  margin-top: calc(var(--space-3) * -1);
+  margin-bottom: calc(var(--space-3) * -1);
 }
 
-.anime-details nav ul li {
-  padding: 10px 12px;
+.anime-details nav::-webkit-scrollbar {
+  display: none;
+}
+
+.anime-details nav ul {
+  display: flex;
+  gap: var(--space-3);
   list-style: none;
-  font-size: 18px;
-  cursor: pointer;
-  color: #e6e6e6;
 }
 
 .anime-details nav ul li a {
-  color: #9ca3af;
-  text-decoration: none;
-  transition: color 0.2s ease;
+  display: block;
+  padding: 8px 20px;
+  background: var(--bg-1);
+  color: var(--text-1);
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.anime-details nav ul li a:hover {
+  background: var(--bg-2);
+  color: var(--text-0);
 }
 
 .anime-details nav ul li a.active {
-  color: #fbbf24;
+  background: var(--accent);
+  color: white;
 }
 
-.anime-details nav ul li:has(a.active) {
-  border-bottom: 2px solid #fbbf24;
-}
-
-/* === overview component === */
-
+/* Overview Component */
 .overview {
   display: flex;
-  gap: 24px;
+  gap: var(--space-6);
   align-items: flex-start;
 }
 
-.overview .load {
-  width: 100%;
-  text-align: center;
-  cursor: progress;
-}
-.overview .load p {
-  font-size: 30px;
-  color: white;
-}
-
-/* sub info div */
-
 .overview .info {
-  width: 34%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  padding: 16px;
+  width: 30%;
+  background: var(--bg-1);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
 }
 
-.overview .info table thead {
-  color: #ffffff;
-  font-size: 20px;
-  padding-bottom: 12px;
-  display: block;
+.overview .info table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.overview .info table tbody tr {
-  color: #999799c0;
+.overview .info table th {
+  text-align: left;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.25rem;
+  color: var(--text-0);
+  padding-bottom: var(--space-3);
 }
 
-.overview .info table tbody tr td {
-  padding-right: 18px;
-  padding-bottom: 12px;
+.overview .info table td {
+  padding-bottom: var(--space-2);
+  font-size: 0.9rem;
+  vertical-align: top;
 }
 
-.overview .info table tbody tr td:last-child {
-  color: #c4c4c4;
+.overview .info table td:first-child {
+  color: var(--text-2);
+  width: 40%;
 }
 
-/* sub description div */
+.overview .info table td:last-child {
+  color: var(--text-1);
+  font-weight: 500;
+}
+
 .overview .desc {
-  width: 66%;
-  padding-bottom: 20px;
+  width: 70%;
 }
 
 .overview .desc h2 {
-  color: #ffffff;
-  font-size: 20px;
-  padding-bottom: 14px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.5rem;
+  color: var(--text-0);
+  margin-bottom: var(--space-3);
+  margin-top: 0;
 }
 
-.overview .desc p {
-  padding-right: 20px;
-  color: #cac5c5;
-  font-weight: 400;
+.overview .desc p,
+.overview .desc .desc-text {
+  max-width: 70ch;
+  color: var(--text-1);
   line-height: 1.7;
+  margin-bottom: var(--space-3);
 }
 
-/* === relations component === */
-
+/* Relations Component */
 .relations_div {
-  width: 100%;
-}
-.relations_div .list_title {
-  font-size: 30px;
-  color: #e7e7e7;
-}
-.relations_div .list_data {
-  padding: 20px 4px 20px 50px;
-}
-.relations_div .list_data a {
-  color: #d6d6d6;
-}
-.relations_div .load {
-  width: 100%;
-  text-align: center;
-  cursor: progress;
-  padding-bottom: 20px;
-}
-.relations_div .load p {
-  font-size: 30px;
-  color: white;
-}
-
-/* === characters component === */
-.character-div {
-  width: 100%;
-}
-.character-div h2 {
-  font-size: 30px;
-  color: white;
-}
-
-.character-div .char-cards {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 18px;
-  padding-block: 20px;
-  transition: display 1s ease;
+  flex-direction: column;
+  gap: var(--space-5);
 }
-.character-div .char-cards .charcard {
-  position: relative;
-  cursor: pointer;
-  border-radius: 16px;
+
+.relation-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.list_title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.25rem;
+  color: var(--text-0);
+  font-weight: 600;
+  margin: 0;
+}
+
+.relation-cards {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+  padding-bottom: var(--space-2);
+}
+
+.relation-card {
+  flex-shrink: 0;
+  width: 200px;
+  background: var(--bg-1);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  transition: var(--transition);
+  scroll-snap-align: start;
+}
+
+.relation-card:hover {
+  background: var(--bg-2);
+  transform: translateY(-4px);
+}
+
+.relation-card .rel-type {
+  font-size: 0.75rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+
+.relation-card .rel-name {
+  color: var(--text-0);
+  font-weight: 500;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+  margin: 0;
 }
 
-.character-div .char-cards .charcard .char_img_div {
-  width: 200px;
-  height: 300px;
-}
-.character-div .char-cards .charcard .char_img_div img {
-  width: 200px;
-  height: 300px;
-  border-radius: 16px;
-  object-fit: cover;
-}
-.character-div .char-cards .charcard .char-info {
-  position: absolute;
-  color: #e7e7e7;
-  bottom: 5px;
-  left: 10px;
-  right: 10px;
-  padding: 10px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.82));
-  text-shadow: 2px 2px 10px #161616cc;
+/* Characters & Staff Components */
+.character-div h2, .staff-div h2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.5rem;
+  color: var(--text-0);
+  margin-bottom: var(--space-4);
+  margin-top: 0;
 }
 
-/* loading stat */
-.character-div .char-cards .load {
+.char-cards, .staff-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-4);
+}
+
+.charcard, .staff-card {
+  background: var(--bg-1);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+}
+
+.charcard:hover, .staff-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-glow);
+}
+
+.char_img_div, .card-img {
   width: 100%;
-  text-align: center;
-  cursor: progress;
-}
-.character-div .char-cards .load p {
-  font-size: 30px;
-  color: white;
+  aspect-ratio: 3 / 4;
 }
 
-/*  before hover */
-.charcard .anime-char {
-  opacity: 1;
+.char_img_div img, .card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
 .charcard .voice-char {
-  opacity: 0;
   display: none;
 }
 
-/* after hover */
 .charcard:hover .anime-char {
-  opacity: 0;
   display: none;
 }
+
 .charcard:hover .voice-char {
-  opacity: 1;
   display: block;
 }
 
-/* === staff component === */
-.staff-div {
-  width: 100%;
-}
-.staff-div h2 {
-  font-size: 30px;
-  color: white;
-}
-.staff-div .staff-cards {
-  padding-block: 20px;
-  width: 100%;
-  display: flex;
-  align-items: stretch;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-.staff-div .staff-cards .staff-card {
-  width: 200px;
-  height: fit-content;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+.char-info, .staff-info {
   padding: 10px;
-}
-.staff-div .staff-cards .card-img {
-  height: 280px;
-  width: 180px;
-}
-.staff-div .staff-cards .card-img img {
-  height: 280px;
-  width: 180px;
-  border-radius: 12px;
-  object-fit: cover;
-  object-position: top;
-}
-.staff-div .staff-cards .staff-card .staff-info {
-  padding-top: 10px;
   display: flex;
-  justify-content: center;
   flex-direction: column;
-  gap: 5px;
-  color: rgb(233, 233, 233);
-  font-size: 16px;
+  gap: 2px;
 }
-.staff-div .staff-cards .staff-card .staff-info p span {
-  font-size: 14px;
-  font-weight: 400;
-  color: #b6b5b5;
+
+.char-info p, .staff-info p {
+  margin: 0;
 }
-.staff-div .staff-cards .load {
-  width: 100%;
-  text-align: center;
-  cursor: progress;
+
+.char-info .name, .staff-info .name, .anime-char:nth-child(1), .voice-char:nth-child(3) {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.staff-div .staff-cards .load p {
-  font-size: 30px;
-  color: white;
+
+.char-info .role, .staff-info .posi, .anime-char:nth-child(2), .voice-char:nth-child(4) {
+  font-size: 0.75rem;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.recommendation {
-  width: 100%;
-}
+
+/* Recommendations */
 .recommendation h2 {
-  font-size: 30px;
-  color: white;
-  padding-block: 20px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.5rem;
+  color: var(--text-0);
+  margin-bottom: var(--space-4);
+  margin-top: 0;
 }
-.recommendation .recommend-animes {
-  padding-block: 20px;
-  width: 100%;
+
+.recommend-animes {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 20px;
+  gap: var(--space-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+  padding-bottom: var(--space-4);
+  align-items: stretch;
 }
-.recommendation .recommend-animes .load {
+
+.recommend-animes .card-link {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.recommend-animes .card-link {
+  flex: 0 0 160px;
+}
+
+.recommend-animes .card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.recommend-animes .img-wrapper {
+  flex-shrink: 0;
+}
+
+.recommend-animes .card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.recommend-animes .card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: calc(2 * 1.3em);
+  line-height: 1.3;
+}
+
+.recommend-animes .card-meta {
+  min-height: 1.2em;
+  margin-top: auto;
+}
+
+.char-cards .skeleton-card, .staff-cards .skeleton-card, .relation-cards .skeleton-card {
   width: 100%;
-  text-align: center;
-  color: white;
-  font-size: 20px;
-}
-.recommendation .recommend-animes .card {
-  height: fit-content;
+  height: 100%;
+  min-height: 250px;
 }
 
-/* ====== responsive part ====== */
-
+/* Responsive */
 @media (max-width: 768px) {
-  /* section 1 */
   .anime-info {
+    padding: var(--space-4) var(--space-4);
+  }
+
+  .hero-content {
     flex-direction: column;
-    padding: 16px 12px 10px;
-    gap: 16px;
+    align-items: center;
+    text-align: center;
+    gap: var(--space-4);
   }
-
-  .anime-info .img-div,
-  .anime-info .info-div,
-  .overview .info,
-  .overview .desc {
-    width: 100%;
-  }
-
-  .anime-info .img-div #image {
-    height: 360px;
-  }
-
-  .anime-info .info-div {
-    padding-top: 6px;
-  }
-
-  .anime-info .info-div h2 {
-    font-size: 28px;
-  }
-
-  .anime-info .info-div .btns button {
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-
-  /* section 2 */
-  .anime-details {
-    padding: 12px 12px 24px;
-  }
-
-  .anime-details nav ul {
-    gap: 6px;
-  }
-
-  .anime-details nav ul li {
-    padding-inline: 2px;
-    font-weight: 500;
-    font-size: 16px;
-  }
-
-  .overview {
-    flex-direction: column;
-  }
-
-  .character-div .char-cards,
-  .staff-div .staff-cards {
+  
+  .meta-row {
     justify-content: center;
   }
-
-  /* === overview component === */
-
+  
+  .anime-info .info-div .btns {
+    justify-content: center;
+  }
+  
   .overview {
     flex-direction: column;
   }
-
-  /* sub info div */
-  .overview .info {
+  
+  .overview .info, .overview .desc {
     width: 100%;
   }
-  .overview .info table tbody tr td:first-child {
-    padding-right: 20vw;
+  
+  .char-cards, .staff-cards {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   }
-
-  /* sub description div */
-  .overview .desc {
-    width: 100%;
-  }
-  .overview .desc p {
-    padding-right: 10px;
-    font-weight: 300;
-  }
-
-  /* === character component */
-  .character-div .char-cards .charcard .char_img_div {
-    width: 110px;
-    height: 170px;
-  }
-  .character-div .char-cards .charcard .char_img_div img {
-    width: 110px;
-    height: 170px;
-  }
-  .character-div .char-cards .charcard .char-info p {
-    font-size: 10px;
-    color: #dfdddd;
-    background-color: #636262;
-    width: fit-content;
-  }
-
-  /* === staff component === */
-  .staff-div .staff-cards .staff-card {
-    width: 120px;
-    height: 250px;
-  }
-  .staff-div .staff-cards .card-img {
-    height: 180px;
-    width: 120px;
-  }
-  .staff-div .staff-cards .card-img img {
-    height: 180px;
-    width: 120px;
-  }
-  .staff-div .staff-cards .staff-card .staff-info {
-    font-size: 12px;
-  }
-  .staff-div .staff-cards .staff-card .staff-info p span {
-    font-size: 10px;
+  
+  .recommend-animes .card-link {
+    flex: 0 0 130px;
   }
 }

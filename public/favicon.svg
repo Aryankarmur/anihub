@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Dark Background Squircle Gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a24" />
+      <stop offset="100%" stop-color="#0a0a0f" />
+    </linearGradient>
+
+    <!-- AniHub Primary Purple Gradient -->
+    <linearGradient id="primary" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7c5cff" />
+      <stop offset="100%" stop-color="#a48cff" />
+    </linearGradient>
+
+    <!-- Drop shadow for depth -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- App Icon Background -->
+  <rect width="512" height="512" rx="120" fill="url(#bg)" />
+  <rect width="504" height="504" x="4" y="4" rx="116" fill="none" stroke="#252533" stroke-width="4" />
+
+  <!-- Double Chevron / Play Symbol -->
+  <g filter="url(#shadow)">
+    <!-- White / Silver (Ani) -->
+    <path d="M 140 170 L 250 256 L 140 342 L 190 256 Z" 
+          fill="#ffffff" 
+          stroke="#ffffff" 
+          stroke-width="24" 
+          stroke-linejoin="round" 
+          stroke-linecap="round" />
+          
+    <!-- Purple (Hub) -->
+    <path d="M 220 136 L 400 256 L 220 376 L 290 256 Z" 
+          fill="url(#primary)" 
+          stroke="url(#primary)" 
+          stroke-width="32" 
+          stroke-linejoin="round" 
+          stroke-linecap="round" />
+  </g>
+</svg>

@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { FaChevronDown } from "react-icons/fa";
+import React, { useEffect, useState } from "react";
+import { FaChevronDown, FaSearch } from "react-icons/fa";
 import "../assets/css/Catalogs.css";
 import Card from "../component/Card";
-import { fetchJikan } from "../api/Fetch";
+import SkeletonCard from "../component/SkeletonCard";
+import { fetchJikan, fetchAniListCatalog } from "../api/Fetch";
 
 const Catalogs = () => {
   const [isDropdown, setIsDropdown] = useState({
@@ -37,23 +38,61 @@ const Catalogs = () => {
   const [pagination, setPagination] = useState({
     current_page: 1,
   });
+  
+  const [totalPages, setTotalPages] = useState(1);
 
   const pageSize = 24;
 
   const buildParams = () => {
     const params = {
-      page: 1,
-      limit: 50,
+      page: pagination.current_page,
+      perPage: pageSize,
     };
 
-    if (selectedFilters.genres.length) {
-      params.genres = selectedFilters.genres.join(",");
+    if (selectedFilters.genres.length > 0) {
+      params.genres = selectedFilters.genres;
     }
 
-    if (selectedFilters.years.from && selectedFilters.years.to) {
-      params.start_date = `${selectedFilters.years.from}-01-01`;
-      params.end_date = `${selectedFilters.years.to}-12-31`;
+    if (selectedFilters.years.from) {
+      params.seasonYear = selectedFilters.years.from;
     }
+
+    if (selectedFilters.seasons.length > 0) {
+      params.season = selectedFilters.seasons[0].toUpperCase();
+    }
+
+    if (selectedFilters.formats.length > 0) {
+      const formatMap = {
+        "tv": "TV",
+        "movie": "MOVIE",
+        "ova": "OVA",
+        "ona": "ONA",
+        "special": "SPECIAL",
+        "tv special": "TV_SHORT",
+        "music": "MUSIC",
+        "cm": "MUSIC",
+        "pv": "MUSIC",
+      };
+      params.format = formatMap[selectedFilters.formats[0].toLowerCase()] || "TV";
+    }
+
+    if (selectedFilters.status.length > 0) {
+      const statusMap = {
+        "airing": "RELEASING",
+        "complete": "FINISHED",
+        "upcoming": "NOT_YET_RELEASED"
+      };
+      params.status = statusMap[selectedFilters.status[0].toLowerCase()] || "RELEASING";
+    }
+
+    const sortMap = {
+      "default": "POPULARITY_DESC",
+      "score": "SCORE_DESC",
+      "newest": "START_DATE_DESC",
+      "oldest": "START_DATE_ASC",
+      "title": "TITLE_ENGLISH_DESC"
+    };
+    params.sort = [sortMap[sortBy || "default"]];
 
     return params;
   };
@@ -64,19 +103,17 @@ const Catalogs = () => {
       setLoadError("");
       const baseParams = buildParams();
 
-      const data = await fetchJikan("anime", {
-        params: { ...baseParams, page: 1, limit: 24 },
-        retries: 1,
-        timeout: 8000,
-      });
+      const data = await fetchAniListCatalog(baseParams);
 
       const items = Array.isArray(data?.data) ? data.data : [];
       setAllAnimeData(items);
+      setTotalPages(data?.pageInfo?.lastPage || 1);
     } catch (error) {
       console.warn("Catalog load failed:", error.message);
       setAllAnimeData([]);
+      setTotalPages(1);
       setLoadError(
-        "Anime catalog is temporarily unavailable. Please refresh in a moment.",
+        "Anime catalog is temporarily unavailable. Please refresh in a moment."
       );
     } finally {
       setLoading(false);
@@ -88,14 +125,18 @@ const Catalogs = () => {
   }, [
     selectedFilters.genres,
     selectedFilters.years.from,
-    selectedFilters.years.to,
+    selectedFilters.seasons,
+    selectedFilters.formats,
+    selectedFilters.status,
+    sortBy,
+    pagination.current_page
   ]);
 
   const currentYear = new Date().getFullYear();
 
   const years = Array.from(
     { length: currentYear - 1917 + 1 },
-    (_, index) => currentYear - index,
+    (_, index) => currentYear - index
   );
 
   const seasons = ["winter", "spring", "summer", "fall"];
@@ -168,73 +209,7 @@ const Catalogs = () => {
     }));
   };
 
-  const filteredAnime = useMemo(() => {
-    const filtered = allAnimeData.filter((anime) => {
-      const noFiltersSelected =
-        selectedFilters.seasons.length === 0 &&
-        selectedFilters.studios.length === 0 &&
-        selectedFilters.formats.length === 0 &&
-        selectedFilters.status.length === 0 &&
-        selectedFilters.genres.length === 0 &&
-        !selectedFilters.years.from &&
-        !selectedFilters.years.to;
-
-      if (noFiltersSelected) {
-        return true;
-      }
-
-      const seasonMatch =
-        selectedFilters.seasons.length === 0 ||
-        selectedFilters.seasons.includes(anime.season?.toLowerCase());
-
-      const studioMatch =
-        selectedFilters.studios.length === 0 ||
-        (anime.studios || []).some((studio) =>
-          selectedFilters.studios.includes(studio.name),
-        );
-
-      const formatMatch =
-        selectedFilters.formats.length === 0 ||
-        selectedFilters.formats.includes(anime.type?.toLowerCase());
-
-      const statusMatch =
-        selectedFilters.status.length === 0 ||
-        selectedFilters.status.includes(anime.status?.toLowerCase());
-
-      const yearMatch =
-        (!selectedFilters.years.from && !selectedFilters.years.to) ||
-        (anime.year &&
-          (!selectedFilters.years.from ||
-            Number(anime.year) >= Number(selectedFilters.years.from)) &&
-          (!selectedFilters.years.to ||
-            Number(anime.year) <= Number(selectedFilters.years.to)));
-
-      return (
-        seasonMatch && studioMatch && formatMatch && statusMatch && yearMatch
-      );
-    });
-
-    const sorted = [...filtered];
-
-    if (sortBy === "score") {
-      sorted.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
-    } else if (sortBy === "newest") {
-      sorted.sort((a, b) => Number(b.year || 0) - Number(a.year || 0));
-    } else if (sortBy === "oldest") {
-      sorted.sort((a, b) => Number(a.year || 0) - Number(b.year || 0));
-    } else if (sortBy === "title") {
-      sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-    }
-
-    return sorted;
-  }, [allAnimeData, selectedFilters, sortBy]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredAnime.length / pageSize));
-
-  const pagedAnime = useMemo(() => {
-    const startIndex = (pagination.current_page - 1) * pageSize;
-    return filteredAnime.slice(startIndex, startIndex + pageSize);
-  }, [filteredAnime, pagination.current_page]);
+  const pagedAnime = allAnimeData;
 
   const getPageNumbers = () => {
     const pages = [];
@@ -571,9 +546,11 @@ const Catalogs = () => {
 
         <div className="cards">
           {loading ? (
-            <div className="emptyState">Loading anime...</div>
+            Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)
           ) : loadError ? (
-            <div className="emptyState">{loadError}</div>
+            <div className="emptyState">
+              <p>{loadError}</p>
+            </div>
           ) : pagedAnime && pagedAnime.length > 0 ? (
             pagedAnime.map((anime) => (
               <Card
@@ -582,13 +559,17 @@ const Catalogs = () => {
                   large_image_url: anime?.images?.webp?.large_image_url,
                   title_english: anime?.title_english,
                   title: anime?.title,
+                  score: anime?.score,
+                  year: anime?.year,
+                  episodes: anime?.episodes
                 }}
                 key={anime.mal_id}
               />
             ))
           ) : (
             <div className="emptyState">
-              No anime matched these filters yet.
+              <FaSearch className="empty-icon" />
+              <p>No anime matched these filters yet.</p>
             </div>
           )}
         </div>

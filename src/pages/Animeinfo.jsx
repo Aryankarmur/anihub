@@ -6,12 +6,66 @@ import { IoBookmarkOutline } from "react-icons/io5";
 import "../assets/css/Animeinfo.css";
 import Card from "../component/Card";
 import { fetchJikan } from "../api/Fetch";
+import SkeletonCard from "../component/SkeletonCard";
 
 const LoadingState = ({ message = "Loading..." }) => (
   <div className="load-state">
-    <div className="spinner-ring" />
     <p>{message}</p>
   </div>
+);
+
+const AnimeInfoSkeleton = () => (
+  <>
+    <section className="anime-info" style={{ backgroundColor: "var(--bg-1)" }}>
+      <div className="hero-overlay"></div>
+      <div className="hero-content">
+        <div className="img-div">
+          <div className="skeleton-card" style={{ width: "100%", height: "100%", minHeight: "350px", margin: 0 }} />
+        </div>
+        <div className="info-div" style={{ display: "flex", flexDirection: "column", gap: "16px", width: "100%" }}>
+          <div className="skeleton-card" style={{ width: "60%", height: "48px", borderRadius: "8px" }} />
+          <div className="meta-row" style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+            <div className="skeleton-card" style={{ width: "60px", height: "30px", borderRadius: "100px" }} />
+            <div className="skeleton-card" style={{ width: "80px", height: "30px", borderRadius: "100px" }} />
+            <div className="skeleton-card" style={{ width: "80px", height: "30px", borderRadius: "100px" }} />
+            <div className="skeleton-card" style={{ width: "60px", height: "30px", borderRadius: "100px" }} />
+          </div>
+          <div className="btns" style={{ display: "flex", gap: "16px", marginTop: "16px" }}>
+            <div className="skeleton-card" style={{ width: "140px", height: "45px", borderRadius: "8px" }} />
+            <div className="skeleton-card" style={{ width: "160px", height: "45px", borderRadius: "8px" }} />
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <section className="anime-details">
+      <nav>
+        <ul style={{ display: "flex", gap: "30px", padding: "16px 0", borderBottom: "1px solid var(--border)", listStyle: "none" }}>
+          <div className="skeleton-card" style={{ width: "80px", height: "24px", borderRadius: "4px" }} />
+          <div className="skeleton-card" style={{ width: "80px", height: "24px", borderRadius: "4px" }} />
+          <div className="skeleton-card" style={{ width: "80px", height: "24px", borderRadius: "4px" }} />
+          <div className="skeleton-card" style={{ width: "80px", height: "24px", borderRadius: "4px" }} />
+        </ul>
+      </nav>
+      
+      <div className="overview" style={{ display: "flex", gap: "30px", marginTop: "30px" }}>
+        <div className="info" style={{ flex: "0 0 250px" }}>
+           <div className="skeleton-card" style={{ width: "100%", height: "400px", borderRadius: "8px" }} />
+        </div>
+        <div className="desc" style={{ flex: "1" }}>
+           <div className="skeleton-card" style={{ width: "40%", height: "32px", marginBottom: "20px", borderRadius: "8px" }} />
+           <div className="skeleton-card" style={{ width: "100%", height: "16px", marginBottom: "12px", borderRadius: "4px" }} />
+           <div className="skeleton-card" style={{ width: "95%", height: "16px", marginBottom: "12px", borderRadius: "4px" }} />
+           <div className="skeleton-card" style={{ width: "90%", height: "16px", marginBottom: "12px", borderRadius: "4px" }} />
+           <div className="skeleton-card" style={{ width: "80%", height: "16px", marginBottom: "30px", borderRadius: "4px" }} />
+           
+           <div className="skeleton-card" style={{ width: "30%", height: "28px", marginBottom: "20px", borderRadius: "8px" }} />
+           <div className="skeleton-card" style={{ width: "100%", height: "16px", marginBottom: "12px", borderRadius: "4px" }} />
+           <div className="skeleton-card" style={{ width: "85%", height: "16px", marginBottom: "12px", borderRadius: "4px" }} />
+        </div>
+      </div>
+    </section>
+  </>
 );
 
 const Animeinfo = () => {
@@ -37,74 +91,152 @@ const Animeinfo = () => {
 
     const fetchAnime = async () => {
       try {
-        const [mainRes, relationRes, characterRes, staffRes, recommendRes] =
-          await Promise.allSettled([
-            fetchJikan(`anime/${id}/full`),
-            fetchJikan(`anime/${id}/relations`),
-            fetchJikan(`anime/${id}/characters`),
-            fetchJikan(`anime/${id}/staff`),
-            fetchJikan(`anime/${id}/recommendations`),
-          ]);
+        const query = `
+          query($id: Int) {
+            Media(id: $id, type: ANIME) {
+              id
+              title { romaji english }
+              coverImage { extraLarge }
+              bannerImage
+              format
+              episodes
+              genres
+              startDate { year month day }
+              status
+              season
+              seasonYear
+              studios(isMain: true) { nodes { name } }
+              source
+              averageScore
+              duration
+              description(asHtml: false)
+              
+              relations {
+                edges {
+                  relationType
+                  node {
+                    id
+                    title { romaji english }
+                    type
+                  }
+                }
+              }
+              
+              characters(sort: ROLE, perPage: 15) {
+                edges {
+                  role
+                  node {
+                    id
+                    name { full }
+                    image { large }
+                  }
+                  voiceActors(language: JAPANESE) {
+                    id
+                    name { full }
+                    image { large }
+                  }
+                }
+              }
+              
+              staff(perPage: 15) {
+                edges {
+                  role
+                  node {
+                    id
+                    name { full }
+                    image { large }
+                  }
+                }
+              }
+              
+              recommendations(perPage: 10, sort: RATING_DESC) {
+                nodes {
+                  mediaRecommendation {
+                    id
+                    title { romaji english }
+                    coverImage { extraLarge }
+                  }
+                }
+              }
+            }
+          }
+        `;
+        const { fetchAniList } = await import("../api/Fetch");
+        const result = await fetchAniList(query, { id: parseInt(id) });
+        const media = result.Media;
 
         if (!isMounted) return;
 
-        if (mainRes.status === "fulfilled") {
-          setAnimefulldata(mainRes.value?.data || null);
-        } else {
-          setAnimedata_error(
-            mainRes.reason?.message || "Failed to load anime details.",
-          );
-        }
+        setAnimefulldata({
+          mal_id: media.id,
+          title: media.title.english || media.title.romaji,
+          images: { webp: { large_image_url: media.coverImage.extraLarge } },
+          banner_image: media.bannerImage || media.coverImage.extraLarge,
+          year: media.seasonYear,
+          episodes: media.episodes,
+          status: media.status,
+          score: media.averageScore ? media.averageScore / 10 : null,
+          type: media.format,
+          genres: media.genres?.map(g => ({ name: g })) || [],
+          aired: { string: media.startDate ? `${media.startDate.year}-${media.startDate.month}-${media.startDate.day}` : 'Unknown' },
+          season: media.season,
+          studios: media.studios?.nodes?.map(n => ({ name: n.name })) || [],
+          source: media.source,
+          duration: media.duration ? `${media.duration} min` : "Unknown",
+          synopsis: media.description,
+          background: ""
+        });
 
-        if (relationRes.status === "fulfilled") {
-          setRelationdata(relationRes.value?.data || []);
-        } else {
-          setRelat_error(
-            relationRes.reason?.message || "Failed to load relations.",
-          );
-        }
+        const groupedRelations = {};
+        media.relations?.edges?.forEach(edge => {
+            if (!edge.node) return;
+            const relType = edge.relationType || "OTHER";
+            if (!groupedRelations[relType]) groupedRelations[relType] = [];
+            groupedRelations[relType].push({
+                mal_id: edge.node.id,
+                type: edge.node.type,
+                name: edge.node.title?.english || edge.node.title?.romaji
+            });
+        });
+        const mappedRelations = Object.keys(groupedRelations).map(k => ({
+            relation: k.replace(/_/g, " "),
+            entry: groupedRelations[k]
+        }));
+        setRelationdata(mappedRelations);
+        
+        setCharacters(media.characters?.edges?.map(edge => ({
+            role: edge.role,
+            character: {
+                mal_id: edge.node?.id,
+                name: edge.node?.name?.full,
+                images: { webp: { image_url: edge.node?.image?.large } }
+            },
+            voice_actors: edge.voiceActors?.length > 0 ? [{
+                person: {
+                    mal_id: edge.voiceActors[0].id,
+                    name: edge.voiceActors[0].name?.full,
+                    images: { jpg: { image_url: edge.voiceActors[0].image?.large } }
+                }
+            }] : []
+        })) || []);
+        
+        setStaff(media.staff?.edges?.map(edge => ({
+            positions: [edge.role],
+            person: {
+                mal_id: edge.node?.id,
+                name: edge.node?.name?.full,
+                images: { jpg: { image_url: edge.node?.image?.large } }
+            }
+        })) || []);
+        
+        setRecommend(media.recommendations?.nodes?.filter(n => n.mediaRecommendation).map(n => ({
+            mal_id: n.mediaRecommendation.id,
+            title: n.mediaRecommendation.title?.english || n.mediaRecommendation.title?.romaji,
+            title_english: n.mediaRecommendation.title?.english,
+            large_image_url: n.mediaRecommendation.coverImage?.extraLarge,
+            images: { webp: { large_image_url: n.mediaRecommendation.coverImage?.extraLarge } }
+        })) || []);
 
-        if (characterRes.status === "fulfilled") {
-          setCharacters(characterRes.value?.data || []);
-        } else {
-          setChar_error(
-            characterRes.reason?.message || "Failed to load characters.",
-          );
-        }
-
-        if (staffRes.status === "fulfilled") {
-          setStaff(staffRes.value?.data || []);
-        } else {
-          setStaff_error(staffRes.reason?.message || "Failed to load staff.");
-        }
-
-        if (recommendRes.status === "fulfilled") {
-          const recommendations = [
-            ...new Map(
-              (recommendRes.value?.data || [])
-                .filter(
-                  (item) =>
-                    item.entry?.images?.webp?.large_image_url !==
-                    "https://cdn.myanimelist.net/images/icon-banned-youtube-rect.png",
-                )
-                .map((item) => [
-                  item.entry?.mal_id,
-                  {
-                    mal_id: item.entry?.mal_id,
-                    large_image_url: item.entry?.images?.webp?.large_image_url,
-                    title: item.entry?.title,
-                    title_english: item.entry?.title,
-                  },
-                ]),
-            ).values(),
-          ];
-
-          setRecommend(recommendations);
-        } else {
-          setRecommend_error(
-            recommendRes.reason?.message || "Failed to load recommendations.",
-          );
-        }
       } catch (error) {
         if (isMounted) {
           setAnimedata_error(error.message || "Failed to load anime details.");
@@ -119,44 +251,52 @@ const Animeinfo = () => {
     };
   }, [id]);
 
+  if (animedata_error && !animefulldata) {
+    return (
+      <div className="load-state error-state" style={{ marginTop: "100px", textAlign: "center" }}>
+        <p>{animedata_error}</p>
+      </div>
+    );
+  }
+
+  if (!animefulldata) {
+    return <AnimeInfoSkeleton />;
+  }
+
   return (
     <>
-      <section className="anime-info">
-        {animefulldata ? (
-          <>
-            <div className="img-div">
-              <div id="image">
-                <img
-                  src={animefulldata?.images?.webp?.large_image_url}
-                  alt={`${animefulldata?.title}`}
-                />
-              </div>
-            </div>
-            <div className="info-div">
-              <h2>{animefulldata?.title}</h2>
-              <p>
-                <FaRegStar /> {animefulldata?.score}
-              </p>
-              <div className="btns">
-                <button id="watchltr">
-                  {" "}
-                  <IoBookmarkOutline /> Add to watch
-                </button>
-                <button id="tocollec">+ Add to Collection</button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="hero-loader">
-            {animedata_error ? (
-              <div className="load-state error-state">
-                <p>{animedata_error}</p>
-              </div>
-            ) : (
-              <LoadingState message="Loading anime details..." />
-            )}
+      <section
+        className="anime-info"
+        style={{ backgroundImage: `url(${animefulldata.banner_image})` }}
+      >
+        <div className="hero-overlay"></div>
+        <div className="hero-content">
+          <div className="img-div">
+            <img
+              src={animefulldata.images?.webp?.large_image_url}
+              alt={`${animefulldata.title}`}
+            />
           </div>
-        )}
+          <div className="info-div">
+            <h2>{animefulldata.title}</h2>
+            <div className="meta-row">
+              {animefulldata.year && <span className="meta-pill">{animefulldata.year}</span>}
+              {animefulldata.episodes && <span className="meta-pill">{animefulldata.episodes} EPS</span>}
+              {animefulldata.status && <span className="meta-pill">{animefulldata.status}</span>}
+              {animefulldata.score && (
+                <span className="meta-pill">
+                  <FaRegStar /> {animefulldata.score}
+                </span>
+              )}
+            </div>
+            <div className="btns">
+              <button id="watchltr">
+                <IoBookmarkOutline /> Add to watch
+              </button>
+              <button id="tocollec">+ Add to Collection</button>
+            </div>
+          </div>
+        </div>
       </section>
       <section className="anime-details">
         <nav>
@@ -261,7 +401,7 @@ export const Overview = () => {
                   </tr>
                   <tr>
                     <td>Rating</td>
-                    <td>{animefulldata?.rating?.split(" - ")[0]}</td>
+                    <td>{animefulldata?.score ? `${animefulldata.score} / 10` : "N/A"}</td>
                   </tr>
                   <tr>
                     <td>Duration</td>
@@ -271,19 +411,19 @@ export const Overview = () => {
               </table>
             </div>
             <div className="desc">
-              <h2>Description</h2>
+              {animefulldata?.synopsis && (
+                <>
+                  <h2>Description</h2>
+                  <div className="desc-text" dangerouslySetInnerHTML={{ __html: animefulldata.synopsis }} />
+                </>
+              )}
 
-              {animefulldata?.synopsis
-                ?.split("\n\n")
-                .map((paragraph, index) => (
-                  <p key={index}>
-                    {paragraph} <br />
-                    <br />
-                  </p>
-                ))}
-
-              <h2> Anime background</h2>
-              <p>{animefulldata?.background}</p>
+              {animefulldata?.background && (
+                <>
+                  <h2 style={{ marginTop: "24px" }}>Anime background</h2>
+                  <div className="desc-text" dangerouslySetInnerHTML={{ __html: animefulldata.background }} />
+                </>
+              )}
             </div>
           </>
         ) : (
@@ -311,36 +451,31 @@ export const Relations = () => {
   return (
     <>
       <div className="relations_div">
-        <dl>
-          {relationdata && relationdata.length > 0 ? (
-            relationdata.map((item, index) => {
-              return (
-                <React.Fragment key={index}>
-                  <dt className="list_title">{item.relation}</dt>
-
-                  {item.entry.map((list) => {
-                    return (
-                      <dd key={list.mal_id} className="list_data">
-                        {" "}
-                        <Link to={`/anime/${list.mal_id}`}>
-                          {list.name}
-                        </Link>{" "}
-                      </dd>
-                    );
-                  })}
-                </React.Fragment>
-              );
-            })
-          ) : (
+        {relationdata && relationdata.length > 0 ? (
+          relationdata.map((item, index) => {
+            return (
+              <div className="relation-group" key={index}>
+                <h3 className="list_title">{item.relation}</h3>
+                <div className="relation-cards">
+                  {item.entry.map((list) => (
+                    <Link to={`/anime/${list.mal_id}`} key={list.mal_id} className="relation-card">
+                      <p className="rel-type">{list.type}</p>
+                      <p className="rel-name">{list.name}</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+          ) : relat_error ? (
             <div className="load-state block-state">
-              {relat_error ? (
-                <p>{relat_error}</p>
-              ) : (
-                <LoadingState message="Loading relations..." />
-              )}
+              <p>{relat_error}</p>
+            </div>
+          ) : (
+            <div className="relation-cards">
+              {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           )}
-        </dl>
       </div>
       <Recommendations
         recommend_anime={recommend}
@@ -393,14 +528,12 @@ export const Characters = () => {
               </div>
             );
           })
-        ) : (
+        ) : char_error ? (
           <div className="load-state block-state">
-            {char_error ? (
-              <p>{char_error}</p>
-            ) : (
-              <LoadingState message="Loading characters..." />
-            )}
+            <p>{char_error}</p>
           </div>
+        ) : (
+          Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)
         )}
       </div>
     </div>
@@ -424,27 +557,18 @@ export const Staff = () => {
                   />
                 </div>
                 <div className="staff-info">
-                  <p className="name">
-                    Name: <span> {item?.person?.name}</span>
-                  </p>
-                  <p className="posi">
-                    Position:{" "}
-                    <span>
-                      {item?.positions?.map((p) => p).join(", ")}
-                    </span>{" "}
-                  </p>
+                  <p className="name">{item?.person?.name}</p>
+                  <p className="posi">{item?.positions?.join(", ")}</p>
                 </div>
               </div>
             );
           })
-        ) : (
+        ) : staff_error ? (
           <div className="load-state block-state">
-            {staff_error ? (
-              <p>{staff_error}</p>
-            ) : (
-              <LoadingState message="Loading staff..." />
-            )}
+            <p>{staff_error}</p>
           </div>
+        ) : (
+          Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)
         )}
       </div>
     </div>
@@ -457,9 +581,7 @@ export const Recommendations = ({ recommend_anime, recommend_error }) => {
       <h2>Recommendation</h2>
       <div className="recommend-animes">
         {recommend_anime === null ? (
-          <div className="load-state block-state">
-            <LoadingState message="Loading recommendations..." />
-          </div>
+          Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)
         ) : recommend_error ? (
           <div className="load-state block-state error-state">
             <p className="error">{recommend_error}</p>

@@ -4,6 +4,11 @@ import { Link } from "react-router-dom";
 import { fetchJikan } from "../api/Fetch";
 
 const Slider = () => {
+  const truncateTitle = (title) => {
+    if (!title) return "";
+    return title.length > 28 ? title.substring(0, 28) + "..." : title;
+  };
+
   const [animeslid, setAnimeslid] = useState(null);
   const [current, setCurrent] = useState(0);
 
@@ -12,18 +17,20 @@ const Slider = () => {
 
     const timer = setInterval(() => {
       setCurrent((prev) => (prev + 1) % animeslid.length);
-    }, 7000);
+    }, 3000);
 
     return () => clearInterval(timer);
-  }, [animeslid]);
+  }, [animeslid, current]);
 
   const seasonAiring = async () => {
     try {
-      const data = await fetchJikan("/seasons/now", {
-        params: { limit: 7 },
-      });
+      const data = await fetchJikan("/seasons/now");
 
-      setAnimeslid(Array.isArray(data?.data) ? data.data : []);
+      const validAnime = (item) => item?.mal_id && item?.images?.webp?.large_image_url;
+      const animeList = Array.isArray(data?.data) 
+        ? data.data.filter(validAnime).slice(0, 7) 
+        : [];
+      setAnimeslid(animeList);
     } catch (error) {
       console.log(error);
     }
@@ -35,35 +42,47 @@ const Slider = () => {
 
   return (
     <div className="main-slid">
-      {animeslid &&
-        animeslid.map((item, index) => {
-          return (
-            <Link to={`anime/${item.mal_id}`} key={index}>
-              <div
-                className="slider"
-                style={{
-                  transform: `translateX(-${current * 100}%)`,
-                }}
-              >
+      <div 
+        className="slider-track"
+        style={{
+          transform: `translateX(-${current * 100}%)`,
+        }}
+      >
+        {animeslid &&
+          animeslid.map((item, index) => {
+            return (
+              <Link to={`anime/${item.mal_id}`} key={index} className="slider">
                 <img
-                  src={item.images.webp.large_image_url}
-                  alt={item.title_english}
+                  src={item.images?.webp?.large_image_url}
+                  alt={item.title_english || item.title}
                 />
                 <div className="details">
                   <p className="ani-title">
-                    {item.title_english || item.title}
+                    {truncateTitle(item.title_english || item.title)}
                   </p>
                   <p className="ani-info">
                     <span className="year">{item.year}</span>
                     <span className="genera">
-                      {item.genres.map((gen) => gen.name).join(", ")}
+                      {item.genres?.map((gen) => gen.name).join(" • ")}
                     </span>
                   </p>
                 </div>
-              </div>
-            </Link>
-          );
-        })}
+              </Link>
+            );
+          })}
+      </div>
+      
+      {animeslid && animeslid.length > 1 && (
+        <div className="slider-indicators">
+          {animeslid.map((_, idx) => (
+            <span 
+              key={idx} 
+              className={`indicator ${idx === current ? "active" : ""}`}
+              onClick={() => setCurrent(idx)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

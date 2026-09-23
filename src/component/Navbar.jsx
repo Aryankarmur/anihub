@@ -37,7 +37,7 @@ const Navbar = () => {
     const resulttimeout = setTimeout(async () => {
       setLoading_search(true);
       try {
-        if (query.trim().length >= 2) {
+        if (query.trim().length >= 3) {
           const result_data = await fetchJikan("anime", {
             params: { q: query, limit: 5 },
           });
@@ -51,7 +51,7 @@ const Navbar = () => {
       } finally {
         setLoading_search(false);
       }
-    }, 500);
+    }, 800);
 
     return () => clearTimeout(resulttimeout);
   }, [query]);
@@ -78,9 +78,9 @@ const Navbar = () => {
     <nav>
       <section className={scroll ? "scroll" : ""}>
         <div className="logo">
-          <p>
-            <span>Ani</span>hub
-          </p>
+          <Link to="/" onClick={handleNavLinkClick}>
+            Ani<span className="accent">Hub</span>
+          </Link>
         </div>
 
         <div className="menu">
@@ -109,40 +109,40 @@ const Navbar = () => {
             />
           </form>
 
-          <div className="search_results">
-            {!location.pathname.includes("/search") && search_res.length > 0
-              ? search_res.map((items) => {
-                  return (
-                    <Link
-                      to={`/anime/${items?.mal_id}`}
-                      key={items?.mal_id}
-                      onClick={handleNavLinkClick}
-                    >
-                      <div className="card_main">
-                        <div className="image">
-                          <img
-                            src={items.images?.webp?.large_image_url}
-                            alt={`${items?.title} image`}
-                          />
+          {!location.pathname.includes("/search") && (search_res.length > 0 || (loading_search && query.trim().length >= 3)) && (
+            <div className="search_results">
+              {search_res.length > 0
+                ? search_res.map((items) => {
+                    return (
+                      <Link
+                        to={`/anime/${items?.mal_id}`}
+                        key={items?.mal_id}
+                        onClick={handleNavLinkClick}
+                      >
+                        <div className="card_main">
+                          <div className="image">
+                            <img
+                              src={items.images?.webp?.large_image_url}
+                              alt={`${items?.title} image`}
+                            />
+                          </div>
+                          <div className="details">
+                            <p>{items.title}</p>
+                            <p>
+                              <span>Score:</span> {items.score} •{" "}
+                              <span>Rating:</span> {items.rating?.split(" - ")[0]}
+                            </p>
+                          </div>
                         </div>
-                        <div className="details">
-                          <p>{items.title}</p>
-                          <p>
-                            <span>Score:</span> {items.score} •{" "}
-                            <span>Rating:</span> {items.rating?.split(" - ")[0]}
-                          </p>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })
-              : ""}
-            {!location.pathname.includes("/search") &&
-            loading_search &&
-            query.trim().length >= 2 ? (
-              <div className="search_status">Searching...</div>
-            ) : null}
-          </div>
+                      </Link>
+                    );
+                  })
+                : null}
+              {loading_search && query.trim().length >= 3 ? (
+                <div className="search_status">Searching...</div>
+              ) : null}
+            </div>
+          )}
 
          
         </div>
@@ -158,7 +158,7 @@ const Navbar = () => {
             {isClick ? <IoIosClose /> : <IoIosMenu />}
           </button>
 
-          <ul className={isClick ? "menu-list" : "dis-none"}>
+          <ul className={isClick ? "menu-list" : "menu-list dis-none"}>
             <li>
               <NavLink to={"/"} end onClick={handleNavLinkClick}>
                 Home

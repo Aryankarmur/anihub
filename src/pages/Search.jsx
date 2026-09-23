@@ -2,7 +2,9 @@ import React, { useEffect, useState } from "react";
 import "../assets/css/Search.css";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Card from "../component/Card";
+import SkeletonCard from "../component/SkeletonCard";
 import { fetchJikan } from "../api/Fetch";
+import { FaSearch } from "react-icons/fa";
 
 const Search = () => {
   const [searchParams] = useSearchParams();
@@ -10,7 +12,7 @@ const Search = () => {
   const [resultsError, setResultsError] = useState("");
   const [resultsloading, setResultsloading] = useState(false);
   const query = searchParams.get("q");
-  const page = Number(searchParams.get("page"));
+  const page = Number(searchParams.get("page")) || 1;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,7 +22,7 @@ const Search = () => {
         setResultsError("");
 
         if (!query) {
-          setResults([]);
+          setResults({ data: [] });
           return;
         }
 
@@ -28,7 +30,7 @@ const Search = () => {
           params: { q: query, page },
         });
 
-        setResults(data || {});
+        setResults(data || { data: [] });
       } catch (error) {
         setResultsError(error.message);
       } finally {
@@ -44,6 +46,7 @@ const Search = () => {
   };
 
   const getPageNumbers = (currentPage, totalPages) => {
+    if (!totalPages) return [];
     const pages = [];
 
     if (totalPages <= 7) {
@@ -76,21 +79,22 @@ const Search = () => {
 
   return (
     <section className="search_main">
-      <h2>
-        Search results for : <span> {query ? query : ""} </span>
-      </h2>
+      <div className="search-header">
+        <h2>
+          Search results for: <span className="query">"{query || ""}"</span>
+        </h2>
+      </div>
       <div className="search_results">
         {resultsloading ? (
-          <div className="notres">
-            <p>Loading...</p>
-          </div>
+          Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)
         ) : resultsError ? (
-          <div className="notres">
+          <div className="empty-state">
             <p>{resultsError}</p>
           </div>
-        ) : results.length <= 0 ? (
-          <div className="notres">
-            <p>No Results Found</p>
+        ) : results.data && results.data.length === 0 ? (
+          <div className="empty-state">
+            <FaSearch className="empty-icon" />
+            <p>No results. Try a different title.</p>
           </div>
         ) : (
           results.data &&
@@ -103,27 +107,32 @@ const Search = () => {
                   large_image_url: anime?.images?.webp?.large_image_url,
                   title_english: anime?.title_english,
                   title: anime?.title,
+                  score: anime?.score,
+                  year: anime?.year,
+                  episodes: anime?.episodes
                 },
               ]),
             ).values(),
           ].map((anime) => <Card animeInfo={anime} key={anime.mal_id} />)
         )}
       </div>
-      <div className="pages">
-        {pages.map((item, index) =>
-          item === "..." ? (
-            <span key={index}>...</span>
-          ) : (
-            <button
-              key={item}
-              onClick={() => changePage(item)}
-              className={page === item ? "active" : ""}
-            >
-              {item}
-            </button>
-          ),
-        )}
-      </div>
+      {pages.length > 0 && (
+        <div className="pages">
+          {pages.map((item, index) =>
+            item === "..." ? (
+              <span key={index}>...</span>
+            ) : (
+              <button
+                key={index}
+                onClick={() => changePage(item)}
+                className={page === item ? "active" : ""}
+              >
+                {item}
+              </button>
+            ),
+          )}
+        </div>
+      )}
     </section>
   );
 };
