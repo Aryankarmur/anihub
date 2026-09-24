@@ -1,0 +1,305 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 100000;
+  display: flex;
+  justify-content: center;
+}
+
+.modal-overlay.align-top {
+  align-items: flex-start;
+  padding: 100px 16px 16px 16px;
+}
+
+.modal-overlay.align-center {
+  align-items: center;
+  padding: 16px;
+}
+
+.modal-container {
+  background: var(--bg-1);
+  border: 1px solid var(--bg-3);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 450px;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--bg-3);
+  background: var(--bg-1);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.25rem;
+  color: var(--text-0);
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+.close-btn:hover {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+
+.modal-content {
+  padding: var(--space-4);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.collection-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.collection-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  background: var(--bg-2);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: var(--transition);
+}
+
+.collection-item:hover {
+  background: var(--bg-3);
+}
+
+.collection-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0; /* for text truncation */
+}
+
+.collection-name {
+  color: var(--text-0);
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collection-desc {
+  color: var(--text-2);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collection-action {
+  flex-shrink: 0;
+  margin-left: var(--space-3);
+}
+
+.collection-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid var(--bg-3);
+  background: transparent;
+  color: var(--text-0);
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 90px;
+  justify-content: center;
+}
+
+.collection-btn:hover:not(:disabled) {
+  background: var(--bg-3);
+}
+
+.collection-btn.added {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(124, 92, 255, 0.1);
+}
+
+.collection-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.create-new-btn {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.create-new-btn:hover {
+  background: rgba(124, 92, 255, 0.1);
+}
+
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  color: var(--text-1);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea {
+  background: var(--bg-2);
+  border: 1px solid var(--bg-3);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  color: var(--text-0);
+  font-family: inherit;
+  font-size: 0.95rem;
+  outline: none;
+  transition: var(--transition);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg-1);
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.form-actions button {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-cancel {
+  background: transparent;
+  border: 1px solid var(--bg-3);
+  color: var(--text-0);
+}
+
+.btn-cancel:hover {
+  background: var(--bg-2);
+}
+
+.btn-submit {
+  background: var(--accent);
+  border: none;
+  color: white;
+}
+
+.btn-submit:hover:not(:disabled) {
+  background: var(--accent-glow);
+}
+
+.btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-2);
+  padding: var(--space-4) 0;
+}
+
+.modal-error {
+  color: var(--danger);
+  background: rgba(255, 92, 92, 0.1);
+  padding: 10px;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.modal-loader {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4);
+  color: var(--text-2);
+}
+
+@media (max-width: 768px) {
+  .modal-overlay.align-top {
+    padding: 80px 16px 16px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-container {
+    max-height: calc(100vh - 100px);
+    border-radius: var(--radius-lg);
+  }
+  
+  .modal-overlay.align-top {
+    padding: 80px 16px 16px 16px;
+  }
+}

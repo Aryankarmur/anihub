@@ -228,38 +228,83 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-4) 0;
+  gap: 8px;
+  padding: var(--space-5) 0 var(--space-2);
   flex-wrap: wrap;
 }
 
 .catalog_section .content .pagination button {
-  padding: 8px 16px;
-  border-radius: var(--radius-pill);
+  min-width: 40px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
   background: var(--bg-1);
-  color: var(--text-0);
-  border: none;
+  color: var(--text-1);
+  border: 1px solid var(--bg-3);
+  font-family: 'Outfit', sans-serif;
   font-weight: 600;
+  font-size: 0.95rem;
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  outline: none;
 }
 
 .catalog_section .content .pagination button:hover:not(:disabled) {
   background: var(--bg-2);
+  color: var(--text-0);
+  border-color: var(--accent);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.catalog_section .content .pagination button:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
 .catalog_section .content .pagination button.active {
   background: var(--accent);
   color: white;
+  border-color: var(--accent);
+  box-shadow: 0 4px 15px rgba(124, 92, 255, 0.3);
+  transform: translateY(-2px);
 }
 
 .catalog_section .content .pagination button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+  background: var(--bg-2);
+  border-color: transparent;
+  transform: none;
+  box-shadow: none;
+}
+
+.catalog_section .content .pagination button:first-child,
+.catalog_section .content .pagination button:last-child {
+  min-width: 80px;
+  background: var(--bg-2);
+  border: 1px solid transparent;
+}
+
+.catalog_section .content .pagination button:first-child:hover:not(:disabled),
+.catalog_section .content .pagination button:last-child:hover:not(:disabled) {
+  background: var(--bg-3);
+  border-color: var(--accent);
+}
+
+.catalog_section .content .pagination span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 40px;
+  color: var(--text-2);
+  font-weight: 600;
+  letter-spacing: 2px;
+  user-select: none;
 }
 
 /* Animations and states for dropdowns */
@@ -281,7 +326,41 @@
 }
 
 @media (max-width: 480px) {
+  .catalog_section {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+  }
   .catalog_section .content .cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+  .catalog_section .content .pagination {
+    gap: 4px;
+  }
+  .catalog_section .content .pagination button {
+    min-width: 34px;
+    height: 36px;
+    padding: 0 6px;
+    font-size: 0.85rem;
+    border-radius: var(--radius-sm);
+  }
+  .catalog_section .content .pagination button:first-child,
+  .catalog_section .content .pagination button:last-child {
+    min-width: 65px;
+    font-size: 0.85rem;
+  }
+  .catalog_section .content .pagination span {
+    min-width: 20px;
+  }
+}
+
+@media (max-width: 360px) {
+  .catalog_section .content .pagination button {
+    min-width: 30px;
+    padding: 0 4px;
+  }
+  .catalog_section .content .pagination button:first-child,
+  .catalog_section .content .pagination button:last-child {
+    min-width: 55px;
   }
 }

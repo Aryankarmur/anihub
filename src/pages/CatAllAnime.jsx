@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchJikan } from "../api/Fetch";
+import { fetchAniListCatalog } from "../api/Fetch";
 import { useParams } from "react-router-dom";
 import Card from "../component/Card";
 import "../assets/css/CatAllAnime.css";
@@ -7,49 +7,48 @@ import "../assets/css/CatAllAnime.css";
 const CatAllAnime = () => {
   const [allAnime, setAllAnime] = useState([]);
   const { anime } = useParams();
-  const [animePath, setAnimePath] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [variables, setVariables] = useState(null);
 
   useEffect(() => {
+    let vars = { page, perPage: 24 };
     switch (anime) {
       case "topAiring":
-        setAnimePath("top/anime?filter=airing");
+        vars = { ...vars, status: "RELEASING", sort: ["SCORE_DESC"] };
         break;
-
       case "newEpisode":
-        setAnimePath("seasons/now");
-
+        vars = { ...vars, status: "RELEASING", sort: ["START_DATE_DESC"] };
         break;
       case "recommendations":
-        setAnimePath("recommendations/anime");
-
+        vars = { ...vars, sort: ["TRENDING_DESC"] };
         break;
       case "upcoming":
-        setAnimePath("top/anime?filter=upcoming");
-
+        vars = { ...vars, status: "NOT_YET_RELEASED", sort: ["POPULARITY_DESC"] };
         break;
       case "Popular":
-        setAnimePath("top/anime?filter=bypopularity");
-
+        vars = { ...vars, sort: ["POPULARITY_DESC"] };
         break;
-
       default:
-        setAnimePath("top/anime?filter=airing");
+        vars = { ...vars, status: "RELEASING", sort: ["SCORE_DESC"] };
         break;
     }
+    setVariables(vars);
+  }, [anime, page]);
 
+  useEffect(() => {
     const fetchAllCatAnime = async () => {
+      if (!variables) return;
       try {
         setLoading(true);
-        if (animePath) {
-          
-          const data = await fetchJikan(animePath);
-          setAllAnime(Array.isArray(data?.data) ? data : []);
-        }
+        setError("");
+        const data = await fetchAniListCatalog(variables);
+        setAllAnime(data.data || []);
+        setTotalPages(data.pageInfo?.lastPage || 1);
       } catch (error) {
-        console.log(animePath);
-        
         setError(error.message);
       } finally {
         setLoading(false);
@@ -57,84 +56,57 @@ const CatAllAnime = () => {
     };
 
     fetchAllCatAnime();
-  }, [animePath, anime]);
+  }, [variables]);
 
-  const getFilterAnime = () => {
-    if (animePath.includes("watch")) {
-      return [
-        ...new Map(
-          allAnime?.data
-            ?.filter(
-              (item) =>
-                item.entry?.images?.webp?.large_image_url !==
-                "https://cdn.myanimelist.net/images/icon-banned-youtube-rect.png",
-            )
-            .map((item) => [
-              item.entry?.mal_id,
-              {
-                mal_id: item.entry?.mal_id,
-                large_image_url: item.entry?.images?.webp?.large_image_url,
-                title: item.entry?.title,
-                title_english: item.entry?.title,
-              },
-            ]),
-        ).values(),
-      ];
+  // Map section key to readable title
+  const getReadableTitle = () => {
+    switch (anime) {
+      case "topAiring": return "TOP AIRING";
+      case "newEpisode": return "NEW EPISODES RELEASES";
+      case "recommendations": return "RECOMMENDED (TRENDING)";
+      case "upcoming": return "UPCOMING";
+      case "Popular": return "MOST POPULAR";
+      default: return anime.toUpperCase();
     }
-
-    if (animePath.includes("recommendations")) {
-      return [
-        ...new Map(
-          allAnime?.data
-            ?.filter(
-              (item) =>
-                item.entry[0]?.images?.webp?.large_image_url !==
-                "https://cdn.myanimelist.net/images/icon-banned-youtube-rect.png",
-            )
-            .map((item) => [
-              item.entry[0]?.mal_id,
-              {
-                mal_id: item.entry[0]?.mal_id,
-                large_image_url: item.entry[0]?.images?.webp?.large_image_url,
-                title: item.entry[0]?.title,
-                title_english: item.entry[0]?.title,
-              },
-            ]),
-        ).values(),
-      ];
-    }
-
-    return [
-      ...new Map(
-        allAnime?.data?.map((item) => [
-          item.mal_id,
-          {
-            mal_id: item.mal_id,
-            large_image_url: item.images?.webp?.large_image_url,
-            title: item.title,
-            title_english: item.title_english,
-          },
-        ]),
-      ).values(),
-    ];
-  };
+  }
 
   return (
     <div className="anime-main-div">
-      <h2>{anime.toLocaleUpperCase()}</h2>
+      <h2>{getReadableTitle()}</h2>
 
       <div className="anime-list">
         {loading ? (
-          <div>Loading...</div>
+          <div className="loading-state">Loading...</div>
         ) : error ? (
-          <div> {error} </div>
+          <div className="error-state">{error}</div>
         ) : (
-          getFilterAnime &&
-          getFilterAnime().map((animeData, i) => {
-            return <Card animeInfo={animeData} key={i} />;
+          allAnime.map((animeData, i) => {
+            return <Card animeInfo={animeData} key={animeData.mal_id || i} />;
           })
         )}
       </div>
+      
+      {!loading && totalPages > 1 && (
+        <div className="pagination">
+          <button 
+            disabled={page === 1} 
+            onClick={() => setPage(p => p - 1)}
+            aria-label="Previous page"
+          >
+            Prev
+          </button>
+          <span className="page-indicator">
+            Page {page} of {totalPages}
+          </span>
+          <button 
+            disabled={page === totalPages} 
+            onClick={() => setPage(p => p + 1)}
+            aria-label="Next page"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 };

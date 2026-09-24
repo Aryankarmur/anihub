@@ -7,10 +7,17 @@ import Animeinfo, { Characters, Overview, Relations, Staff } from "./pages/Anime
 import "./App.css";
 import Catalogs from "./pages/Catalogs";
 import CatAllAnime from "./pages/CatAllAnime";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import MyLibrary from "./pages/MyLibrary";
+import Profile from "./pages/Profile";
+import { AuthProvider } from "./context/AuthContext";
 
 const App = () => {
   return (
     <>
+    <AuthProvider>
       <BrowserRouter>
         <Navbar />
         <Routes>
@@ -23,11 +30,16 @@ const App = () => {
           </Route>
           <Route path="/search" element={<Search/>}/>
           <Route path="/catalog" element={<Catalogs/>}/>
-         
-          <Route path={"/allanime/:anime"} element={<CatAllAnime/>}/>
+          <Route path="/allanime/:anime" element={<CatAllAnime/>}/>
+          <Route path="/library" element={<MyLibrary />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
         </Routes>
         <Footer />
       </BrowserRouter>
+    </AuthProvider>
     </>
   );
 };

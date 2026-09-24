@@ -111,6 +111,29 @@
   background: var(--bg-3);
 }
 
+.anime-info .info-div .btns button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.anime-info .info-div .btns button.saved {
+  background: var(--bg-2);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.anime-info .info-div .btns button.saved:hover {
+  background: rgba(124, 92, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.watchlist-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
 .hero-loader {
   position: relative;
   z-index: 2;

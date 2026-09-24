@@ -15,8 +15,105 @@
 
 @media (max-width:768px) {
     .anime-main-div .anime-list{
-
         grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
     }
-    
+}
+
+/* Pagination Styling */
+.anime-main-div .pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  flex-wrap: wrap;
+}
+
+.anime-main-div .pagination button {
+  min-width: 80px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  color: var(--text-1);
+  border: 1px solid var(--bg-3);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+.anime-main-div .pagination button:hover:not(:disabled) {
+  background: var(--bg-2);
+  color: var(--text-0);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.anime-main-div .pagination button:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.anime-main-div .pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--bg-2);
+  border-color: transparent;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Active Page Indicator */
+.anime-main-div .pagination .page-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 20px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 15px rgba(124, 92, 255, 0.3);
+  font-size: 0.95rem;
+  user-select: none;
+}
+
+/* Responsive constraints */
+@media (max-width: 480px) {
+  .anime-main-div .pagination {
+    gap: 8px;
+    padding: 30px 10px;
+  }
+  .anime-main-div .pagination button {
+    min-width: 65px;
+    height: 36px;
+    padding: 0 10px;
+    font-size: 0.85rem;
+  }
+  .anime-main-div .pagination .page-indicator {
+    height: 36px;
+    padding: 0 14px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .anime-main-div .pagination {
+    gap: 6px;
+  }
+  .anime-main-div .pagination button {
+    min-width: 55px;
+    padding: 0 8px;
+  }
+  .anime-main-div .pagination .page-indicator {
+    padding: 0 10px;
+  }
 }

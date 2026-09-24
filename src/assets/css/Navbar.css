@@ -50,7 +50,7 @@ nav .menu ul {
   list-style: none;
 }
 
-nav .menu ul li a {
+nav .menu ul li a:not(.nav-auth-btn) {
   color: var(--text-1);
   font-weight: 500;
   transition: var(--transition);
@@ -93,25 +93,43 @@ nav .search-form {
   max-width: 340px;
 }
 
+.search-input-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 16px;
+  color: var(--text-2);
+  font-size: 1.1rem;
+  pointer-events: none;
+}
+
 nav input {
   width: 100%;
-  height: 40px;
-  padding: 0 var(--space-4);
+  height: 44px;
+  padding: 0 16px 0 44px;
   background: var(--bg-1);
-  border: 1px solid transparent;
+  border: 1px solid var(--bg-3);
   border-radius: var(--radius-pill);
   color: var(--text-0);
   outline: none;
+  font-size: 1.05rem;
   transition: var(--transition);
 }
 
 nav input::placeholder {
   color: var(--text-2);
+  font-size: 1.1rem;
 }
 
 nav input:focus {
   border: 1px solid var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
+  background: var(--bg-2);
 }
 
 nav .menu .search_results {
@@ -243,11 +261,6 @@ nav .menu .search_status {
   box-sizing: border-box;
 }
 
-.mobile-search-form input {
-  border: 1px solid var(--text-2);
-  background: transparent;
-}
-
 @media (max-width: 768px) {
   nav .menu {
     display: none;
@@ -255,5 +268,87 @@ nav .menu .search_status {
 
   .mob-menu {
     display: flex;
+  }
+}
+
+/* Authentication Navbar Styles */
+.nav-auth-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  outline: none;
+  line-height: 1;
+}
+
+.nav-auth-btn::after {
+  display: none;
+}
+
+.nav-auth-btn.solid {
+  background: var(--accent);
+  color: white;
+}
+
+.nav-auth-btn.solid:hover {
+  background: var(--accent-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(124, 92, 255, 0.3);
+}
+
+.nav-auth-btn.outline {
+  background: transparent;
+  color: var(--text-0);
+  border: 1px solid var(--bg-3);
+}
+
+.nav-auth-btn.outline:hover {
+  background: var(--bg-2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.user-indicator {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 4px 12px;
+  background: rgba(124, 92, 255, 0.1);
+  border-radius: var(--radius-pill);
+  user-select: none;
+  text-decoration: none;
+  display: inline-block;
+  transition: var(--transition);
+}
+
+.user-indicator:hover {
+  background: rgba(124, 92, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.user-indicator::after {
+  display: none !important;
+}
+
+/* Desktop-specific Auth Button Proportions */
+@media (min-width: 769px) {
+  .nav-auth-btn {
+    height: 38px;
+    padding: 0 12px;
+  }
+  
+  .nav-auth-btn.outline {
+    min-width: 86px;
+  }
+  
+  .nav-auth-btn.solid {
+    min-width: 92px;
   }
 }

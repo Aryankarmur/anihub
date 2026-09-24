@@ -3,7 +3,9 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import "../assets/css/Navbar.css";
 import { IoIosMenu } from "react-icons/io";
 import { IoIosClose } from "react-icons/io";
+import { FaSearch } from "react-icons/fa";
 import { fetchJikan } from "../api/Fetch";
+import { useAuth } from "../context/AuthContext";
 
 const Navbar = () => {
   const [isClick, setIsClick] = useState(false);
@@ -11,9 +13,16 @@ const Navbar = () => {
   const [query, setQuery] = useState("");
   const [search_res, setSearch_res] = useState([]);
   const [loading_search, setLoading_search] = useState(false);
+  
+  const { currentUser, logout } = useAuth();
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleLogout = async () => {
+    await logout();
+    setIsClick(false);
+  };
 
   const handleMenu = () => {
     setIsClick(!isClick);
@@ -95,18 +104,46 @@ const Navbar = () => {
                 Catalog
               </NavLink>
             </li>
-         
+            {currentUser ? (
+              <>
+                <li>
+                  <NavLink to={"/library"} onClick={handleNavLinkClick}>
+                    My Library
+                  </NavLink>
+                </li>
+                <li>
+                  <Link to="/profile" className="user-indicator" onClick={handleNavLinkClick}>
+                    {currentUser.displayName || currentUser.email.split('@')[0]}
+                  </Link>
+                </li>
+                <li>
+                  <button onClick={handleLogout} className="nav-auth-btn outline">Logout</button>
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <Link to="/login" className="nav-auth-btn outline" onClick={handleNavLinkClick}>Login</Link>
+                </li>
+                <li>
+                  <Link to="/register" className="nav-auth-btn solid" onClick={handleNavLinkClick}>Sign Up</Link>
+                </li>
+              </>
+            )}
           </ul>
 
           <form onSubmit={handelSearchForm} className="search-form">
-            <input
-              type="search"
-              name="search"
-              id="search"
-              placeholder="Search anime"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+            <div className="search-input-wrapper">
+              <FaSearch className="search-icon" />
+              <input
+                type="search"
+                name="search"
+                id="search"
+                placeholder="Search anime..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
           </form>
 
           {!location.pathname.includes("/search") && (search_res.length > 0 || (loading_search && query.trim().length >= 3)) && (
@@ -170,14 +207,44 @@ const Navbar = () => {
               </NavLink>
             </li>
             
+            {currentUser ? (
+              <>
+                <li>
+                  <NavLink to={"/library"} onClick={handleNavLinkClick}>
+                    My Library
+                  </NavLink>
+                </li>
+                <li>
+                  <Link to="/profile" className="user-indicator" onClick={handleNavLinkClick}>
+                    {currentUser.displayName || currentUser.email.split('@')[0]}
+                  </Link>
+                </li>
+                <li>
+                  <button onClick={handleLogout} className="nav-auth-btn outline" style={{width: '100%', padding: '10px', marginTop: '8px'}}>Logout</button>
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <Link to="/login" className="nav-auth-btn outline" onClick={handleNavLinkClick} style={{display: 'block', width: '100%', padding: '10px', marginTop: '8px'}}>Login</Link>
+                </li>
+                <li>
+                  <Link to="/register" className="nav-auth-btn solid" onClick={handleNavLinkClick} style={{display: 'block', width: '100%', padding: '10px', marginTop: '8px'}}>Sign Up</Link>
+                </li>
+              </>
+            )}
+            
             <form onSubmit={handelSearchForm} className="mobile-search-form">
-              <input
-                type="search"
-                name="search"
-                placeholder="Search anime"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+              <div className="search-input-wrapper">
+                <FaSearch className="search-icon" />
+                <input
+                  type="search"
+                  name="search"
+                  placeholder="Search anime..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
             </form>
             
           </ul>

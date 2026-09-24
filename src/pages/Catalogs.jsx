@@ -322,20 +322,20 @@ const Catalogs = () => {
             </div>
             <div
               className={`dropdown_items ${isDropdown.isSort ? "show" : "hide"} `}
+              style={{ width: "100%" }}
             >
-              <label htmlFor="sort-select">
-                <select
-                  id="sort-select"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                >
-                  <option value="default">Default</option>
-                  <option value="score">Highest Score</option>
-                  <option value="newest">Newest First</option>
-                  <option value="oldest">Oldest First</option>
-                  <option value="title">Title A-Z</option>
-                </select>
-              </label>
+              <select
+                id="sort-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                <option value="default">Default</option>
+                <option value="score">Highest Score</option>
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="title">Title A-Z</option>
+              </select>
             </div>
           </div>
 
@@ -521,6 +521,7 @@ const Catalogs = () => {
         <div className="pagination">
           <button
             disabled={pagination.current_page === 1}
+            aria-label="Previous page"
             onClick={() =>
               setPagination((prev) => ({
                 ...prev,
@@ -533,11 +534,13 @@ const Catalogs = () => {
 
           {getPageNumbers().map((page, index) =>
             page === "..." ? (
-              <span key={index}>...</span>
+              <span key={index} aria-hidden="true">...</span>
             ) : (
               <button
                 key={index}
                 className={pagination.current_page === page ? "active" : ""}
+                aria-label={`Page ${page}`}
+                aria-current={pagination.current_page === page ? "page" : undefined}
                 onClick={() =>
                   setPagination((prev) => ({
                     ...prev,
@@ -552,6 +555,7 @@ const Catalogs = () => {
 
           <button
             disabled={pagination.current_page === totalPages}
+            aria-label="Next page"
             onClick={() =>
               setPagination((prev) => ({
                 ...prev,

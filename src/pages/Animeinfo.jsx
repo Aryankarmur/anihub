@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useOutletContext } from "react-router-dom";
+import { Link, NavLink, Outlet, useOutletContext, useNavigate } from "react-router-dom";
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { FaRegStar } from "react-icons/fa6";
@@ -7,6 +7,9 @@ import "../assets/css/Animeinfo.css";
 import Card from "../component/Card";
 import { fetchJikan } from "../api/Fetch";
 import SkeletonCard from "../component/SkeletonCard";
+import CollectionModal from "../component/CollectionModal";
+import { useAuth } from "../context/AuthContext";
+import { addToWatchlist, removeFromWatchlist, checkInWatchlist } from "../firebase/firestore";
 
 const LoadingState = ({ message = "Loading..." }) => (
   <div className="load-state">
@@ -85,6 +88,14 @@ const Animeinfo = () => {
 
   const [recommend, setRecommend] = useState(null);
   const [recommend_error, setRecommend_error] = useState("");
+
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistError, setWatchlistError] = useState("");
+  const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -220,14 +231,33 @@ const Animeinfo = () => {
             }] : []
         })) || []);
         
-        setStaff(media.staff?.edges?.map(edge => ({
-            positions: [edge.role],
+        const rawStaff = media.staff?.edges?.map(edge => ({
+            positions: [edge.role].filter(Boolean),
             person: {
                 mal_id: edge.node?.id,
                 name: edge.node?.name?.full,
                 images: { jpg: { image_url: edge.node?.image?.large } }
             }
-        })) || []);
+        })) || [];
+
+        const uniqueStaffMap = new Map();
+        rawStaff.forEach(item => {
+            const key = item.person.mal_id || item.person.name;
+            if (!key) return; // Skip invalid entries
+
+            if (uniqueStaffMap.has(key)) {
+                const existing = uniqueStaffMap.get(key);
+                item.positions.forEach(pos => {
+                    if (!existing.positions.includes(pos)) {
+                        existing.positions.push(pos);
+                    }
+                });
+            } else {
+                uniqueStaffMap.set(key, item);
+            }
+        });
+
+        setStaff(Array.from(uniqueStaffMap.values()));
         
         setRecommend(media.recommendations?.nodes?.filter(n => n.mediaRecommendation).map(n => ({
             mal_id: n.mediaRecommendation.id,
@@ -250,6 +280,76 @@ const Animeinfo = () => {
       isMounted = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchWatchlistState = async () => {
+      if (currentUser && animefulldata?.mal_id) {
+        try {
+          const { data, error } = await checkInWatchlist(currentUser.uid, animefulldata.mal_id);
+          if (isMounted && data !== undefined) {
+            setInWatchlist(data);
+          }
+        } catch (e) {
+          console.error("Watchlist check error:", e);
+        }
+      } else if (!currentUser && isMounted) {
+        setInWatchlist(false);
+      }
+    };
+    fetchWatchlistState();
+    return () => { isMounted = false; };
+  }, [currentUser, animefulldata?.mal_id]);
+
+  const handleWatchlistClick = async () => {
+    if (!currentUser) {
+      navigate("/login");
+      return;
+    }
+    
+    if (!animefulldata) return;
+
+    setWatchlistLoading(true);
+    setWatchlistError("");
+    
+    try {
+      if (inWatchlist) {
+        await removeFromWatchlist(currentUser.uid, animefulldata.mal_id);
+        setInWatchlist(false);
+      } else {
+        const animeData = {
+          animeId: animefulldata.mal_id,
+          title: animefulldata.title,
+          image: animefulldata.images?.webp?.large_image_url || animefulldata.banner_image || "",
+          type: animefulldata.type,
+          score: animefulldata.score
+        };
+        await addToWatchlist(currentUser.uid, animeData);
+        setInWatchlist(true);
+      }
+    } catch (e) {
+      setWatchlistError("Failed to update watchlist.");
+      console.error(e);
+    } finally {
+      setWatchlistLoading(false);
+    }
+  };
+
+  const handleCollectionClick = () => {
+    if (!currentUser) {
+      navigate("/login");
+      return;
+    }
+    setIsCollectionModalOpen(true);
+  };
+
+  const formattedAnimeData = animefulldata ? {
+    animeId: animefulldata.mal_id,
+    title: animefulldata.title,
+    image: animefulldata.images?.webp?.large_image_url || animefulldata.banner_image || "",
+    type: animefulldata.type,
+    score: animefulldata.score
+  } : null;
 
   if (animedata_error && !animefulldata) {
     return (
@@ -290,11 +390,21 @@ const Animeinfo = () => {
               )}
             </div>
             <div className="btns">
-              <button id="watchltr">
-                <IoBookmarkOutline /> Add to watch
+              <button 
+                id="watchltr" 
+                onClick={handleWatchlistClick}
+                disabled={watchlistLoading}
+                className={inWatchlist ? "saved" : ""}
+              >
+                {watchlistLoading ? "Loading..." : inWatchlist ? (
+                  <><IoBookmarkOutline /> Added to Watchlist</>
+                ) : (
+                  <><IoBookmarkOutline /> Add to Watchlist</>
+                )}
               </button>
-              <button id="tocollec">+ Add to Collection</button>
+              <button id="tocollec" onClick={handleCollectionClick}>+ Add to Collection</button>
             </div>
+            {watchlistError && <p className="watchlist-error">{watchlistError}</p>}
           </div>
         </div>
       </section>
@@ -337,6 +447,15 @@ const Animeinfo = () => {
           }}
         />
       </section>
+
+      {formattedAnimeData && (
+        <CollectionModal 
+          isOpen={isCollectionModalOpen} 
+          onClose={() => setIsCollectionModalOpen(false)} 
+          user={currentUser} 
+          animeData={formattedAnimeData} 
+        />
+      )}
     </>
   );
 };
@@ -547,9 +666,9 @@ export const Staff = () => {
       <h2>Staff</h2>
       <div className="staff-cards">
         {staff && staff.length > 0 ? (
-          staff.map((item) => {
+          staff.map((item, index) => {
             return (
-              <div className="staff-card" key={item?.person?.mal_id}>
+              <div className="staff-card" key={item?.person?.mal_id || item?.person?.name || index}>
                 <div className="card-img">
                   <img
                     src={item?.person?.images?.jpg?.image_url}
@@ -558,7 +677,7 @@ export const Staff = () => {
                 </div>
                 <div className="staff-info">
                   <p className="name">{item?.person?.name}</p>
-                  <p className="posi">{item?.positions?.join(", ")}</p>
+                  <p className="posi">{item?.positions?.join(" • ")}</p>
                 </div>
               </div>
             );
