@@ -6,7 +6,7 @@ A responsive anime discovery and personal library web application built with Rea
 
 ## 🚀 Live Demo
 
-Live Website: 'https://anihub-anime.netlify.app'
+**[Live Link](https://anihub-anime.netlify.app)**
 
 ## 📖 About the Project
 
