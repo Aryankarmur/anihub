@@ -12,7 +12,8 @@
  * - Reads only the anime documents already fetched by the active subscription.
  * - Never modifies anime documents directly; delegates to existing services.
  * - Respects autoGroupExcluded: true on an anime document (manual override).
- * - Respects manualGroup: true on a group document (user-named group).
+ * - Reconciles only groups explicitly marked groupType: "automatic".
+ * - Treats manual and pre-marker groups as protected user data.
  * - Never merges groups across different scopeKeys.
  * - Idempotent: repeated reconciliation with unchanged data produces zero writes.
  * - Transitive chains: A->B->C are joined even when only A and C are saved.

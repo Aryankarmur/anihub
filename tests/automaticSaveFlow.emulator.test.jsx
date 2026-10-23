@@ -112,6 +112,7 @@ describe("automatic grouping through the real save flow", () => {
       const groups = await loadGroups();
       expect(groups.size).toBe(1);
       groupId = groups.docs[0].id;
+      expect(groups.docs[0].data().groupType).toBe("automatic");
       expect((await loadMembers(groupId)).size).toBe(2);
     }, { timeout: 10_000 });
 

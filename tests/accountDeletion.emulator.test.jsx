@@ -20,10 +20,10 @@ import {
 import { getGroupNameReservationId } from "../src/firebase/groupingUtils";
 
 const productionRules = readFileSync(
-  new URL("../src/production-firestore-rules.txt", import.meta.url),
+  "src/production-firestore-rules.txt",
   "utf8",
 );
-const proposedRules = readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
+const proposedRules = readFileSync("firestore.rules", "utf8");
 
 let productionEnv;
 let proposedEnv;

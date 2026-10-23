@@ -352,6 +352,50 @@ test("rename atomically transfers the deterministic reservation", async () => {
   assert.equal((await getDoc(groupRef(db, "alice", "g1"))).data().name, "After");
 });
 
+test("group provenance is immutable while pre-marker groups remain editable", async () => {
+  await seedAnime("alice", "watchlist", ["1", "2"]);
+  const db = testEnv.authenticatedContext("alice").firestore();
+  await createGroup(db, "alice", {
+    groupId: "manual-origin",
+    name: "Manual Origin",
+    scopeKey: "watchlist",
+    animeIds: ["1", "2"]
+  });
+  await assertFails(updateDoc(groupRef(db, "alice", "manual-origin"), {
+    groupType: "automatic",
+    updatedAt: serverTimestamp()
+  }));
+
+  const normalized = normalizeGroupName("Legacy Group");
+  const reservationId = await getGroupNameReservationId(
+    "watchlist",
+    normalized.normalizedName
+  );
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const adminDb = context.firestore();
+    await setDoc(groupRef(adminDb, "alice", "legacy-origin"), {
+      name: normalized.name,
+      normalizedName: normalized.normalizedName,
+      reservationId,
+      scopeKey: "watchlist",
+      collectionId: null,
+      thumbnailAnimeId: "1",
+      status: "active",
+      createdAt: new Date("2025-01-01T00:00:00Z"),
+      updatedAt: new Date("2025-01-01T00:00:00Z")
+    });
+    await setDoc(reservationRef(adminDb, "alice", reservationId), {
+      scopeKey: "watchlist",
+      normalizedName: normalized.normalizedName,
+      groupId: "legacy-origin",
+      createdAt: new Date("2025-01-01T00:00:00Z")
+    });
+  });
+  await assertSucceeds(updateDoc(groupRef(db, "alice", "legacy-origin"), {
+    updatedAt: serverTimestamp()
+  }));
+});
+
 test("cross-scope, cross-group, and deleting-group assignments are denied", async () => {
   await seedAnime("alice", "watchlist", ["1", "2", "3", "4", "5"]);
   await seedAnime("alice", "completed", ["6"]);
@@ -732,6 +776,45 @@ test("legacy reconciliation lists from one through eight tasks can be cleared sa
       _groupingReconciliations: deleteField()
     }));
   }
+});
+
+test("one atomic move may provenance-check both source and destination group tasks", async () => {
+  await seedAnime("alice", "watchlist", ["1", "2"]);
+  await seedAnime("alice", "completed", ["1", "3"]);
+  const db = testEnv.authenticatedContext("alice").firestore();
+  await createGroup(db, "alice", {
+    groupId: "source-two-task",
+    name: "Source Two Task",
+    scopeKey: "watchlist",
+    animeIds: ["1", "2"]
+  });
+  await createGroup(db, "alice", {
+    groupId: "destination-two-task",
+    name: "Destination Two Task",
+    scopeKey: "completed",
+    animeIds: ["1", "3"]
+  });
+  const tasks = [
+    { sourceScope: "watchlist", sourceGroupId: "source-two-task", animeId: "1" },
+    { sourceScope: "completed", sourceGroupId: "destination-two-task", animeId: "1" }
+  ];
+
+  await assertSucceeds(runTransaction(db, async (transaction) => {
+    const source = animeRef(db, "alice", "watchlist", "1");
+    const destination = animeRef(db, "alice", "completed", "1");
+    const sourceSnapshot = await transaction.get(source);
+    transaction.set(destination, {
+      ...sourceSnapshot.data(),
+      groupId: deleteField(),
+      _groupingReconciliations: tasks,
+      addedAt: serverTimestamp()
+    }, { merge: true });
+    transaction.delete(source);
+  }));
+  assert.deepEqual(
+    (await getDoc(animeRef(db, "alice", "completed", "1"))).data()._groupingReconciliations,
+    tasks
+  );
 });
 
 test("a deleting Collection rejects additions and lock clearing but permits cleanup", async () => {
