@@ -58,8 +58,11 @@ export const normalizeGroupName = (name) => {
     );
   }
 
-  const normalizedName = normalizeWhitespace(name.normalize("NFKC"))
-    .toLocaleLowerCase("en-US");
+  // Firestore Rules supports trim/lower/regex replacement, but not Unicode
+  // normalization. Keep the reservation key derivation exactly reproducible
+  // by rules; visually equivalent Unicode spellings remain a documented
+  // limitation rather than a client-controlled normalization bypass.
+  const normalizedName = displayName.toLowerCase();
 
   return { name: displayName, normalizedName };
 };
@@ -130,6 +133,7 @@ export const buildGroupMetadata = ({
   scopeKey,
   collectionId = null,
   thumbnailAnimeId,
+  creationMemberIds,
   groupType = GROUP_TYPE_MANUAL,
   status = "active",
   createdAt,
@@ -141,6 +145,7 @@ export const buildGroupMetadata = ({
   scopeKey,
   collectionId,
   thumbnailAnimeId,
+  creationMemberIds,
   groupType,
   status,
   createdAt,

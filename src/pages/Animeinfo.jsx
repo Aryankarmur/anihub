@@ -18,6 +18,7 @@ import {
   getFirestoreErrorMessage
 } from "../firebase/firestore";
 import { writeCachedRelations } from "../firebase/autoGroupingService";
+import { selectAutomaticGroupingRelations } from "../firebase/anilistRelations";
 
 const LoadingState = ({ message = "Loading..." }) => (
   <div className="load-state">
@@ -187,13 +188,12 @@ const Animeinfo = () => {
 
         if (!isMounted) return;
 
-        const anilistRelations = (media.relations?.edges || [])
+        const anilistRelations = selectAutomaticGroupingRelations((media.relations?.edges || [])
           .filter(edge => edge?.node?.type === "ANIME" && edge.node?.id)
           .map(edge => ({
             relatedId: String(edge.node.id),
             relationType: String(edge.relationType || "").toUpperCase()
-          }))
-          .filter(r => r.relatedId && r.relationType);
+          })));
 
         if (media.id && anilistRelations.length > 0) {
           writeCachedRelations(String(media.id), anilistRelations);

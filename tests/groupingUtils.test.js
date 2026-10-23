@@ -94,13 +94,14 @@ test("large operations have no member cap and split into retryable bounded chunk
   assert.deepEqual(chunks.flat(), animeIds);
 });
 
-test("group metadata contains no duplicated membership list or count", () => {
+test("group metadata stores only a fixed creation proof, not mutable membership state", () => {
   const metadata = buildGroupMetadata({
     name: "Monogatari",
     normalizedName: "monogatari",
     reservationId: "reservation",
     scopeKey: "watchlist",
     thumbnailAnimeId: "1",
+    creationMemberIds: ["1", "2"],
     status: "active",
     createdAt: "created",
     updatedAt: "updated"
@@ -108,6 +109,7 @@ test("group metadata contains no duplicated membership list or count", () => {
   assert.deepEqual(Object.keys(metadata).sort(), [
     "collectionId",
     "createdAt",
+    "creationMemberIds",
     "groupType",
     "name",
     "normalizedName",
@@ -117,6 +119,7 @@ test("group metadata contains no duplicated membership list or count", () => {
     "thumbnailAnimeId",
     "updatedAt"
   ]);
+  assert.deepEqual(metadata.creationMemberIds, ["1", "2"]);
   assert.equal("animeIds" in metadata, false);
   assert.equal("memberCount" in metadata, false);
 });

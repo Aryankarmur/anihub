@@ -1,6 +1,6 @@
 // PROPOSED LOCAL RULESET FOR F01 VERIFICATION ONLY.
-// The deployed Firebase Console rules were not available for comparison.
-// Do not deploy this file until it has been reviewed against production rules.
+// Compared against src/production-firestore-rules.txt during G1.3/G1.4.
+// Do not deploy this file until the staged rollout review is complete.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -18,6 +18,44 @@ service cloud.firestore {
 
     function collectionAfter(uid, collectionId) {
       return getAfter(/databases/$(database)/documents/users/$(uid)/collections/$(collectionId));
+    }
+
+    function canonicalGroupName(name) {
+      return name.trim().replace('\\s+', ' ').lower();
+    }
+
+    function validAniListRelation(relation) {
+      return relation is map
+        && relation.keys().hasAll(['relatedId', 'relationType'])
+        && relation.keys().hasOnly(['relatedId', 'relationType'])
+        && relation.relatedId is string
+        && relation.relatedId.matches('^[1-9][0-9]{0,9}$')
+        && relation.relationType in ['PREQUEL', 'SEQUEL'];
+    }
+
+    function validAniListRelations(data) {
+      let relations = data.get('anilistRelations', []);
+      return relations is list
+        && relations.size() <= 8
+        && (relations.size() < 1 || validAniListRelation(relations[0]))
+        && (relations.size() < 2 || validAniListRelation(relations[1]))
+        && (relations.size() < 3 || validAniListRelation(relations[2]))
+        && (relations.size() < 4 || validAniListRelation(relations[3]))
+        && (relations.size() < 5 || validAniListRelation(relations[4]))
+        && (relations.size() < 6 || validAniListRelation(relations[5]))
+        && (relations.size() < 7 || validAniListRelation(relations[6]))
+        && (relations.size() < 8 || validAniListRelation(relations[7]))
+        // Rules can cheaply reject exact duplicate maps. The client applies
+        // the stronger one-relatedId-only invariant because Rules cannot map
+        // this bounded object list into a set of relatedId field values.
+        && relations.toSet().size() == relations.size();
+    }
+
+    function validAnimeDocument(data, animeId) {
+      return data.keys().hasAny(['animeId'])
+        && data.animeId is string
+        && data.animeId == animeId
+        && validAniListRelations(data);
     }
 
     function validMovementTask(task, animeId) {
@@ -159,7 +197,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'name', 'normalizedName', 'reservationId', 'scopeKey',
           'collectionId', 'thumbnailAnimeId', 'status', 'createdAt', 'updatedAt',
-          'membershipOperation', 'groupType'
+          'membershipOperation', 'groupType', 'creationMemberIds'
         ])
         && data.name is string
         && data.name.size() > 0
@@ -179,7 +217,28 @@ service cloud.firestore {
             && data.scopeKey == 'collection:' + data.collectionId
           )
         )
-        && (data.thumbnailAnimeId == null || data.thumbnailAnimeId is string)
+        && (
+          data.thumbnailAnimeId == null
+          || (
+            data.thumbnailAnimeId is string
+            && data.thumbnailAnimeId.size() > 0
+            && !data.thumbnailAnimeId.matches('.*[/].*')
+          )
+        )
+        && (
+          !data.keys().hasAny(['creationMemberIds'])
+          || (
+            data.creationMemberIds is list
+            && data.creationMemberIds.size() == 2
+            && data.creationMemberIds[0] is string
+            && data.creationMemberIds[0].size() > 0
+            && !data.creationMemberIds[0].matches('.*[/].*')
+            && data.creationMemberIds[1] is string
+            && data.creationMemberIds[1].size() > 0
+            && !data.creationMemberIds[1].matches('.*[/].*')
+            && data.creationMemberIds[0] != data.creationMemberIds[1]
+          )
+        )
         && (
           !data.keys().hasAny(['groupType'])
           || data.groupType in ['manual', 'automatic']
@@ -202,6 +261,127 @@ service cloud.firestore {
       return getAfter(/databases/$(database)/documents/users/$(uid)/groups/$(groupId));
     }
 
+    function memberAfterMatches(uid, groupId, data, animeId) {
+      return (
+        data.scopeKey == 'watchlist'
+        && getAfter(
+          /databases/$(database)/documents/users/$(uid)/watchlist/$(animeId)
+        ).data.groupId == groupId
+      ) || (
+        data.scopeKey == 'completed'
+        && getAfter(
+          /databases/$(database)/documents/users/$(uid)/completed/$(animeId)
+        ).data.groupId == groupId
+      ) || (
+        data.collectionId is string
+        && data.scopeKey == 'collection:' + data.collectionId
+        && getAfter(
+          /databases/$(database)/documents/users/$(uid)/collections/$(data.collectionId)/items/$(animeId)
+        ).data.groupId == groupId
+      );
+    }
+
+    function validNewGroupMembers(uid, groupId, data) {
+      return data.keys().hasAny(['creationMemberIds'])
+        && memberAfterMatches(uid, groupId, data, data.creationMemberIds[0])
+        && memberAfterMatches(uid, groupId, data, data.creationMemberIds[1])
+        && (
+          data.thumbnailAnimeId == null
+          || data.thumbnailAnimeId in data.creationMemberIds
+        );
+    }
+
+    function validActiveThumbnail(uid, groupId, data) {
+      return data.status != 'active'
+        || data.thumbnailAnimeId == null
+        || memberAfterMatches(uid, groupId, data, data.thumbnailAnimeId);
+    }
+
+    function validCollectionGroupingState(data) {
+      return data.keys().hasAny(['groupingState'])
+        && data.groupingState is map
+        && data.groupingState.keys().hasAll(['groupCount', 'lastGroupId'])
+        && data.groupingState.keys().hasOnly(['groupCount', 'lastGroupId'])
+        && data.groupingState.groupCount is int
+        && data.groupingState.groupCount >= 0
+        && data.groupingState.lastGroupId is string
+        && data.groupingState.lastGroupId.size() > 0
+        && !data.groupingState.lastGroupId.matches('.*[/].*');
+    }
+
+    function groupWasCreatedForCollection(uid, collectionId, groupId) {
+      return !exists(/databases/$(database)/documents/users/$(uid)/groups/$(groupId))
+        && existsAfter(/databases/$(database)/documents/users/$(uid)/groups/$(groupId))
+        && groupAfter(uid, groupId).data.scopeKey == 'collection:' + collectionId
+        && groupAfter(uid, groupId).data.createdAt == request.time;
+    }
+
+    function groupWasDeletedForCollection(uid, collectionId, groupId) {
+      return exists(/databases/$(database)/documents/users/$(uid)/groups/$(groupId))
+        && get(
+          /databases/$(database)/documents/users/$(uid)/groups/$(groupId)
+        ).data.scopeKey == 'collection:' + collectionId
+        && !existsAfter(/databases/$(database)/documents/users/$(uid)/groups/$(groupId));
+    }
+
+    function validCollectionGroupingTransition(uid, collectionId, before, after) {
+      return validCollectionGroupingState(after)
+        && (
+          (
+            !before.keys().hasAny(['groupingState'])
+            && after.groupingState.groupCount == 1
+            && groupWasCreatedForCollection(
+              uid, collectionId, after.groupingState.lastGroupId
+            )
+          )
+          || (
+            validCollectionGroupingState(before)
+            && after.groupingState.groupCount == before.groupingState.groupCount + 1
+            && groupWasCreatedForCollection(
+              uid, collectionId, after.groupingState.lastGroupId
+            )
+          )
+          || (
+            validCollectionGroupingState(before)
+            && before.groupingState.groupCount > 0
+            && after.groupingState.groupCount == before.groupingState.groupCount - 1
+            && groupWasDeletedForCollection(
+              uid, collectionId, after.groupingState.lastGroupId
+            )
+          )
+        );
+    }
+
+    function collectionCounterIncremented(uid, groupId, data) {
+      return data.collectionId == null
+        || (
+          validCollectionGroupingState(collectionAfter(uid, data.collectionId).data)
+          && collectionAfter(uid, data.collectionId).data.groupingState.lastGroupId == groupId
+          && collectionAfter(uid, data.collectionId).data.groupingState.groupCount
+            == get(
+              /databases/$(database)/documents/users/$(uid)/collections/$(data.collectionId)
+            ).data.get('groupingState', {'groupCount': 0}).groupCount + 1
+        );
+    }
+
+    function collectionCounterDecremented(uid, groupId, data) {
+      return data.collectionId == null
+        || !exists(
+          /databases/$(database)/documents/users/$(uid)/collections/$(data.collectionId)
+        )
+        || !get(
+          /databases/$(database)/documents/users/$(uid)/collections/$(data.collectionId)
+        ).data.keys().hasAny(['groupingState'])
+        || (
+          validCollectionGroupingState(collectionAfter(uid, data.collectionId).data)
+          && collectionAfter(uid, data.collectionId).data.groupingState.lastGroupId == groupId
+          && collectionAfter(uid, data.collectionId).data.groupingState.groupCount
+            == get(
+              /databases/$(database)/documents/users/$(uid)/collections/$(data.collectionId)
+            ).data.groupingState.groupCount - 1
+        );
+    }
+
     function reservationMatchesGroup(uid, groupId, data) {
       return reservationAfter(uid, data.reservationId).data.groupId == groupId
         && reservationAfter(uid, data.reservationId).data.scopeKey == data.scopeKey
@@ -222,7 +402,8 @@ service cloud.firestore {
     }
 
     function validAnimeCreate(uid, expectedScope, animeId) {
-      return validMovementTaskList(request.resource.data, animeId)
+      return validAnimeDocument(request.resource.data, animeId)
+        && validMovementTaskList(request.resource.data, animeId)
         && (
           !request.resource.data.keys().hasAny(['_groupingReconciliations'])
           || validNewReconciliationTasks(uid, expectedScope, animeId)
@@ -234,7 +415,8 @@ service cloud.firestore {
     }
 
     function validAnimeUpdate(uid, expectedScope, animeId) {
-      return validMovementTaskList(request.resource.data, animeId)
+      return validAnimeDocument(request.resource.data, animeId)
+        && validMovementTaskList(request.resource.data, animeId)
         && (
           !request.resource.data.keys().hasAny(['_groupingReconciliations'])
           || validReconciliationTaskTransitions(uid, expectedScope, animeId)
@@ -278,9 +460,30 @@ service cloud.firestore {
       }
 
       match /collections/{collectionId} {
-        allow read, create, delete: if isOwner(uid);
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && !request.resource.data.keys().hasAny(['groupingState', 'deletionState']);
         allow update: if isOwner(uid)
-          && (!isDeletingCollection(resource.data) || isDeletingCollection(request.resource.data));
+          && (!isDeletingCollection(resource.data) || isDeletingCollection(request.resource.data))
+          && (
+            !request.resource.data.keys().hasAny(['deletionState'])
+            || isDeletingCollection(request.resource.data)
+          )
+          && (
+            request.resource.data.get('groupingState', null)
+              == resource.data.get('groupingState', null)
+            || validCollectionGroupingTransition(
+              uid, collectionId, resource.data, request.resource.data
+            )
+          );
+        allow delete: if isOwner(uid)
+          && (
+            !resource.data.keys().hasAny(['groupingState'])
+            || (
+              validCollectionGroupingState(resource.data)
+              && resource.data.groupingState.groupCount == 0
+            )
+          );
 
         match /items/{animeId} {
           allow read, delete: if isOwner(uid);
@@ -309,6 +512,8 @@ service cloud.firestore {
         allow create: if isOwner(uid)
           && validGroupMetadata(request.resource.data)
           && request.resource.data.keys().hasAny(['groupType'])
+          && request.resource.data.normalizedName
+            == canonicalGroupName(request.resource.data.name)
           && request.resource.data.status == 'active'
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
@@ -318,7 +523,9 @@ service cloud.firestore {
               collectionAfter(uid, request.resource.data.collectionId).data
             )
           )
-          && reservationMatchesGroup(uid, groupId, request.resource.data);
+          && reservationMatchesGroup(uid, groupId, request.resource.data)
+          && validNewGroupMembers(uid, groupId, request.resource.data)
+          && collectionCounterIncremented(uid, groupId, request.resource.data);
 
         allow update: if isOwner(uid)
           && validGroupMetadata(request.resource.data)
@@ -326,11 +533,26 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.keys().hasAny(['groupType'])
             == resource.data.keys().hasAny(['groupType'])
+          && request.resource.data.keys().hasAny(['creationMemberIds'])
+            == resource.data.keys().hasAny(['creationMemberIds'])
+          && (
+            !resource.data.keys().hasAny(['creationMemberIds'])
+            || request.resource.data.creationMemberIds == resource.data.creationMemberIds
+          )
           && (
             !resource.data.keys().hasAny(['groupType'])
             || request.resource.data.groupType == resource.data.groupType
           )
           && validStatusTransition(resource.data.status, request.resource.data.status)
+          && (
+            (
+              request.resource.data.name == resource.data.name
+              && request.resource.data.normalizedName == resource.data.normalizedName
+            )
+            || request.resource.data.normalizedName
+              == canonicalGroupName(request.resource.data.name)
+          )
+          && validActiveThumbnail(uid, groupId, request.resource.data)
           && (
             request.resource.data.collectionId == null
             || !isDeletingCollection(collectionAfter(uid, request.resource.data.collectionId).data)
@@ -360,7 +582,8 @@ service cloud.firestore {
         allow delete: if isOwner(uid)
           && !existsAfter(
             /databases/$(database)/documents/users/$(uid)/groupNameKeys/$(resource.data.reservationId)
-          );
+          )
+          && collectionCounterDecremented(uid, groupId, resource.data);
       }
 
       match /groupNameKeys/{reservationId} {

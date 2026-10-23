@@ -10,6 +10,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDoc,
@@ -95,12 +96,19 @@ const createGroup = async (db, uid, {
   const targetGroupRef = groupRef(db, uid, groupId);
   const targetReservationRef = reservationRef(db, uid, reservationId);
   const memberRefs = memberIds.map((animeId) => animeRef(db, uid, scopeKey, animeId));
+  const targetCollectionRef = scopeKey.startsWith("collection:")
+    ? doc(db, "users", uid, "collections", scopeKey.slice("collection:".length))
+    : null;
 
   await runTransaction(db, async (transaction) => {
-    const [reservationSnapshot, ...memberSnapshots] = await Promise.all([
+    const snapshots = await Promise.all([
       transaction.get(targetReservationRef),
-      ...memberRefs.map((member) => transaction.get(member))
+      ...memberRefs.map((member) => transaction.get(member)),
+      ...(targetCollectionRef ? [transaction.get(targetCollectionRef)] : [])
     ]);
+    const reservationSnapshot = snapshots[0];
+    const memberSnapshots = snapshots.slice(1, 1 + memberRefs.length);
+    const collectionSnapshot = targetCollectionRef ? snapshots.at(-1) : null;
     if (reservationSnapshot.exists()) throw new Error("duplicate-name");
     memberSnapshots.forEach((snapshot) => {
       if (!snapshot.exists()) throw new Error("anime-not-found");
@@ -115,11 +123,20 @@ const createGroup = async (db, uid, {
         ? scopeKey.slice("collection:".length)
         : null,
       thumbnailAnimeId: memberIds[0],
+      creationMemberIds: memberIds.slice(0, 2),
       groupType: "manual",
       status: "active",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
+    if (targetCollectionRef) {
+      transaction.update(targetCollectionRef, {
+        groupingState: {
+          groupCount: (collectionSnapshot.data().groupingState?.groupCount ?? 0) + 1,
+          lastGroupId: groupId
+        }
+      });
+    }
     transaction.set(targetReservationRef, {
       scopeKey,
       normalizedName: normalized.normalizedName,
@@ -212,12 +229,24 @@ const deleteGroupChunked = async (db, uid, scopeKey, groupId, { stopAfterChunks 
 
   await runTransaction(db, async (transaction) => {
     const targetReservationRef = reservationRef(db, uid, groupData.reservationId);
-    await Promise.all([
+    const targetCollectionRef = groupData.collectionId
+      ? doc(db, "users", uid, "collections", groupData.collectionId)
+      : null;
+    const snapshots = await Promise.all([
       transaction.get(targetGroupRef),
-      transaction.get(targetReservationRef)
+      transaction.get(targetReservationRef),
+      ...(targetCollectionRef ? [transaction.get(targetCollectionRef)] : [])
     ]);
     transaction.delete(targetGroupRef);
     transaction.delete(targetReservationRef);
+    if (targetCollectionRef && snapshots.at(-1).data().groupingState) {
+      transaction.update(targetCollectionRef, {
+        groupingState: {
+          groupCount: snapshots.at(-1).data().groupingState.groupCount - 1,
+          lastGroupId: groupId
+        }
+      });
+    }
   });
   return { clearedCount, complete: true };
 };
@@ -240,6 +269,56 @@ beforeEach(async () => {
 
 after(async () => {
   await testEnv?.cleanup();
+});
+
+test("anime writes enforce bounded AniList relation metadata and path identity", async () => {
+  const db = testEnv.authenticatedContext("alice").firestore();
+  const validRelations = Array.from({ length: 8 }, (_, index) => ({
+    relatedId: String(index + 2),
+    relationType: index % 2 === 0 ? "SEQUEL" : "PREQUEL"
+  }));
+
+  await assertSucceeds(setDoc(animeRef(db, "alice", "watchlist", "1"), {
+    animeId: "1",
+    title: "Valid",
+    anilistRelations: validRelations,
+    addedAt: serverTimestamp()
+  }));
+  await assertSucceeds(setDoc(animeRef(db, "alice", "watchlist", "legacy"), {
+    animeId: "legacy",
+    title: "Legacy without relationship metadata",
+    addedAt: serverTimestamp()
+  }));
+
+  const invalidRelations = [
+    { relatedId: "2", relationType: "SEQUEL" },
+    [{ relatedId: "2", relationType: "SEQUEL", nested: {} }],
+    [{ relatedId: "2" }],
+    [{ relatedId: "", relationType: "SEQUEL" }],
+    [{ relatedId: "12345678901", relationType: "SEQUEL" }],
+    [{ relatedId: "2", relationType: "SIDE_STORY" }],
+    [
+      { relatedId: "2", relationType: "SEQUEL" },
+      { relatedId: "2", relationType: "SEQUEL" }
+    ],
+    Array.from({ length: 9 }, (_, index) => ({
+      relatedId: String(index + 2), relationType: "SEQUEL"
+    }))
+  ];
+
+  for (const [index, anilistRelations] of invalidRelations.entries()) {
+    await assertFails(setDoc(animeRef(db, "alice", "watchlist", `bad-${index}`), {
+      animeId: `bad-${index}`,
+      title: "Invalid",
+      anilistRelations,
+      addedAt: serverTimestamp()
+    }));
+  }
+  await assertFails(setDoc(animeRef(db, "alice", "watchlist", "path-id"), {
+    animeId: "different-id",
+    title: "Mismatched identity",
+    addedAt: serverTimestamp()
+  }));
 });
 
 test("owner can create a two-member group; missing anime and one-member service input fail", async () => {
@@ -274,6 +353,37 @@ test("same-scope names are unique, cross-scope names are allowed, and concurrent
     groupId: "stolen"
   }));
 
+  const bypassName = "Series";
+  const bypassNormalized = "series-bypass";
+  const bypassReservationId = await getGroupNameReservationId("watchlist", bypassNormalized);
+  await assertFails(runTransaction(db, async (transaction) => {
+    transaction.set(groupRef(db, "alice", "normalization-bypass"), {
+      name: bypassName,
+      normalizedName: bypassNormalized,
+      reservationId: bypassReservationId,
+      scopeKey: "watchlist",
+      collectionId: null,
+      thumbnailAnimeId: "3",
+      creationMemberIds: ["3", "4"],
+      groupType: "manual",
+      status: "active",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    transaction.set(reservationRef(db, "alice", bypassReservationId), {
+      scopeKey: "watchlist",
+      normalizedName: bypassNormalized,
+      groupId: "normalization-bypass",
+      createdAt: serverTimestamp()
+    });
+    transaction.update(animeRef(db, "alice", "watchlist", "3"), {
+      groupId: "normalization-bypass"
+    });
+    transaction.update(animeRef(db, "alice", "watchlist", "4"), {
+      groupId: "normalization-bypass"
+    });
+  }));
+
   const attempts = await Promise.allSettled([
     createGroup(db, "alice", {
       groupId: "race-a", name: "Concurrent", scopeKey: "watchlist", animeIds: ["3", "4"]
@@ -304,6 +414,74 @@ test("same-scope names are unique, cross-scope names are allowed, and concurrent
       createdAt: serverTimestamp()
     });
   }));
+});
+
+test("group thumbnails must be current members while valid changes remain allowed", async () => {
+  await seedAnime("alice", "watchlist", ["1", "2", "3"]);
+  const db = testEnv.authenticatedContext("alice").firestore();
+  await createGroup(db, "alice", {
+    groupId: "thumbnail-group", name: "Thumbnail", scopeKey: "watchlist", animeIds: ["1", "2"]
+  });
+
+  await assertSucceeds(updateDoc(groupRef(db, "alice", "thumbnail-group"), {
+    thumbnailAnimeId: "2",
+    updatedAt: serverTimestamp()
+  }));
+  await assertFails(updateDoc(groupRef(db, "alice", "thumbnail-group"), {
+    thumbnailAnimeId: "3",
+    updatedAt: serverTimestamp()
+  }));
+  await assertFails(updateDoc(groupRef(db, "alice", "thumbnail-group"), {
+    thumbnailAnimeId: "404",
+    updatedAt: serverTimestamp()
+  }));
+  await assertSucceeds(updateDoc(groupRef(db, "alice", "thumbnail-group"), {
+    thumbnailAnimeId: null,
+    updatedAt: serverTimestamp()
+  }));
+});
+
+test("Collection counters block direct deletion with groups and preserve legacy deletion", async () => {
+  await seedAnime("alice", "collection:grouped", ["1", "2", "3", "4"]);
+  const db = testEnv.authenticatedContext("alice").firestore();
+  const concurrentGroups = [
+    {
+      groupId: "collection-group-a",
+      name: "Collection group A",
+      scopeKey: "collection:grouped",
+      animeIds: ["1", "2"]
+    },
+    {
+      groupId: "collection-group-b",
+      name: "Collection group B",
+      scopeKey: "collection:grouped",
+      animeIds: ["3", "4"]
+    }
+  ];
+  const attempts = await Promise.allSettled(
+    concurrentGroups.map((group) => createGroup(db, "alice", group))
+  );
+  for (const [index, attempt] of attempts.entries()) {
+    if (attempt.status === "rejected") {
+      await createGroup(db, "alice", concurrentGroups[index]);
+    }
+  }
+  const groupedCollection = doc(db, "users", "alice", "collections", "grouped");
+  assert.equal((await getDoc(groupedCollection)).data().groupingState.groupCount, 2);
+  await assertFails(deleteDoc(groupedCollection));
+
+  await deleteGroupChunked(db, "alice", "collection:grouped", "collection-group-a");
+  assert.equal((await getDoc(groupedCollection)).data().groupingState.groupCount, 1);
+  await assertFails(deleteDoc(groupedCollection));
+  await deleteGroupChunked(db, "alice", "collection:grouped", "collection-group-b");
+  assert.equal((await getDoc(groupedCollection)).data().groupingState.groupCount, 0);
+  await assertSucceeds(deleteDoc(groupedCollection));
+
+  const legacyCollection = doc(db, "users", "alice", "collections", "legacy");
+  await assertSucceeds(setDoc(legacyCollection, {
+    name: "Legacy", createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+  }));
+  await assertSucceeds(deleteDoc(legacyCollection));
 });
 
 test("unauthenticated and cross-user access is denied", async () => {
@@ -353,7 +531,7 @@ test("rename atomically transfers the deterministic reservation", async () => {
 });
 
 test("group provenance is immutable while pre-marker groups remain editable", async () => {
-  await seedAnime("alice", "watchlist", ["1", "2"]);
+  await seedAnime("alice", "watchlist", ["1", "2", "3", "4"]);
   const db = testEnv.authenticatedContext("alice").firestore();
   await createGroup(db, "alice", {
     groupId: "manual-origin",
@@ -379,7 +557,7 @@ test("group provenance is immutable while pre-marker groups remain editable", as
       reservationId,
       scopeKey: "watchlist",
       collectionId: null,
-      thumbnailAnimeId: "1",
+      thumbnailAnimeId: "3",
       status: "active",
       createdAt: new Date("2025-01-01T00:00:00Z"),
       updatedAt: new Date("2025-01-01T00:00:00Z")
@@ -389,6 +567,12 @@ test("group provenance is immutable while pre-marker groups remain editable", as
       normalizedName: normalized.normalizedName,
       groupId: "legacy-origin",
       createdAt: new Date("2025-01-01T00:00:00Z")
+    });
+    await updateDoc(animeRef(adminDb, "alice", "watchlist", "3"), {
+      groupId: "legacy-origin"
+    });
+    await updateDoc(animeRef(adminDb, "alice", "watchlist", "4"), {
+      groupId: "legacy-origin"
     });
   });
   await assertSucceeds(updateDoc(groupRef(db, "alice", "legacy-origin"), {
@@ -650,12 +834,12 @@ test("grouped movement commits an ungrouped destination and permits retryable so
   );
 });
 
-test("rules document the unavoidable minimum-member enforcement limitation", async () => {
-  await seedAnime("alice", "watchlist", ["1"]);
+test("rules reject singleton creation even when a modified client supplies group metadata", async () => {
+  await seedAnime("alice", "watchlist", ["1", "2"]);
   const db = testEnv.authenticatedContext("alice").firestore();
   const normalized = normalizeGroupName("Malicious singleton");
   const reservationId = await getGroupNameReservationId("watchlist", normalized.normalizedName);
-  await assertSucceeds(runTransaction(db, async (transaction) => {
+  await assertFails(runTransaction(db, async (transaction) => {
     transaction.set(groupRef(db, "alice", "singleton"), {
       name: normalized.name,
       normalizedName: normalized.normalizedName,
@@ -663,6 +847,7 @@ test("rules document the unavoidable minimum-member enforcement limitation", asy
       scopeKey: "watchlist",
       collectionId: null,
       thumbnailAnimeId: "1",
+      creationMemberIds: ["1", "2"],
       groupType: "manual",
       status: "active",
       createdAt: serverTimestamp(),
@@ -676,7 +861,7 @@ test("rules document the unavoidable minimum-member enforcement limitation", asy
     });
     transaction.update(animeRef(db, "alice", "watchlist", "1"), { groupId: "singleton" });
   }));
-  assert.equal((await getDocs(memberQuery(db, "alice", "watchlist", "singleton", 2))).size, 1);
+  assert.equal((await getDoc(groupRef(db, "alice", "singleton"))).exists(), false);
 });
 
 test("movement markers reject malformed, custom-scope, cross-user-shaped, and unprovenanced tasks", async () => {

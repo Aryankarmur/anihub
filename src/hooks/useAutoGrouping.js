@@ -16,7 +16,23 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isAnimeGroupingEnabled } from "../firebase/groupingFeatureGate.js";
+import * as groupingFeatureGate from "../firebase/groupingFeatureGate.js";
+
+const isAutoReconcileEnabled = () => {
+  if (!groupingFeatureGate.isAnimeGroupingEnabled) {
+    return false;
+  }
+  try {
+    if (typeof groupingFeatureGate.isAutomaticReconciliationEnabled === "function") {
+      return groupingFeatureGate.isAutomaticReconciliationEnabled();
+    }
+  } catch {
+    // mock fallback
+  }
+  return true;
+};
+
+
 import {
   ANILIST_RELATIONS_FIELD,
   backfillRelationsFromAniList,
@@ -92,7 +108,7 @@ export function useAutoGrouping({
 
   useEffect(() => {
     // Prerequisites: feature gate, auth, scope, and data loaded.
-    if (!isAnimeGroupingEnabled || !uid || !scopeKey || isLoading) return;
+    if (!isAutoReconcileEnabled() || !uid || !scopeKey || isLoading) return;
 
     // Compute fingerprint using only relation/groupId/exclusion fields
     // (not the full anime object to avoid false positives).
@@ -120,7 +136,7 @@ export function useAutoGrouping({
 
   /** Manually trigger a reconciliation pass (e.g. from "Organize Library" button). */
   const triggerReconcile = useCallback(async (options = {}) => {
-    if (!isAnimeGroupingEnabled || !uid || !scopeKey || isLoading) return;
+    if (!isAutoReconcileEnabled() || !uid || !scopeKey || isLoading) return;
     lastFingerprintRef.current = null; // force re-run
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);

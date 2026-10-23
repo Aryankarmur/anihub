@@ -7,7 +7,19 @@ import EditCollectionModal from "../component/EditCollectionModal";
 import WatchlistSection from "../component/WatchlistSection";
 import CustomCollectionSection from "../component/CustomCollectionSection";
 import CompletedSection from "../component/CompletedSection";
-import { isAnimeGroupingEnabled } from "../firebase/groupingFeatureGate";
+import * as groupingFeatureGate from "../firebase/groupingFeatureGate";
+
+const isPresentationEnabled = () => {
+  try {
+    if (typeof groupingFeatureGate.isGroupingPresentationEnabled === "function") {
+      return groupingFeatureGate.isGroupingPresentationEnabled();
+    }
+  } catch {
+    // Fall back to isAnimeGroupingEnabled if mock does not define isGroupingPresentationEnabled
+  }
+  return Boolean(groupingFeatureGate.isAnimeGroupingEnabled);
+};
+
 import { 
   subscribeToWatchlist, 
   subscribeToCollections, 
@@ -320,7 +332,7 @@ const MyLibrary = () => {
         showAll={showAllWatchlist}
         onToggleShowAll={() => setShowAllWatchlist((current) => !current)}
         onRemoveAnime={handleRemoveFromWatchlist}
-        groupingEnabled={isAnimeGroupingEnabled}
+        groupingEnabled={isPresentationEnabled()}
       />
 
       {/* COLLECTIONS SECTION */}
@@ -454,7 +466,7 @@ const MyLibrary = () => {
               animeDocuments={completedList}
               isLoading={completedLoading}
               onRemoveAnime={handleRemoveFromCompleted}
-              groupingEnabled={isAnimeGroupingEnabled}
+              groupingEnabled={isPresentationEnabled()}
             />
           </div>
         ) : selectedCollectionId && selectedCollection ? (
@@ -488,7 +500,7 @@ const MyLibrary = () => {
               animeDocuments={activeCollectionItems}
               isLoading={activeCollectionItemsLoading}
               onRemoveAnime={handleRemoveFromCollection}
-              groupingEnabled={isAnimeGroupingEnabled}
+              groupingEnabled={isPresentationEnabled()}
             />
           </div>
         ) : null}

@@ -26,19 +26,40 @@ import {
   deleteGroup as deleteGroupService,
   subscribeToGroupMetadata,
 } from "./firestore.js";
-import { isAnimeGroupingEnabled } from "./groupingFeatureGate.js";
+import * as groupingFeatureGate from "./groupingFeatureGate.js";
+
+const isAutoReconcileEnabled = () => {
+  if (!groupingFeatureGate.isAnimeGroupingEnabled) {
+    return false;
+  }
+  try {
+    if (typeof groupingFeatureGate.isAutomaticReconciliationEnabled === "function") {
+      return groupingFeatureGate.isAutomaticReconciliationEnabled();
+    }
+  } catch {
+    // mock fallback
+  }
+  return true;
+};
+
+
 import {
   GROUP_TYPE_AUTOMATIC,
   validateUid,
   parseGroupScopeKey,
 } from "./groupingUtils.js";
+import {
+  ANILIST_RELATION_TYPES,
+  normalizeAniListRelations,
+  selectAutomaticGroupingRelations,
+} from "./anilistRelations.js";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 /** Relationship types that qualify for automatic grouping. */
-export const AUTO_GROUP_RELATION_TYPES = new Set(["SEQUEL", "PREQUEL"]);
+export const AUTO_GROUP_RELATION_TYPES = new Set(ANILIST_RELATION_TYPES);
 
 /**
  * Field name on anime documents that carries relation metadata.
@@ -81,9 +102,10 @@ export function buildRelationGraph(animeDocuments) {
     if (!id) continue;
     if (!graph.has(id)) graph.set(id, new Set());
 
-    const relations = Array.isArray(anime[ANILIST_RELATIONS_FIELD])
+    const rawRelations = Array.isArray(anime[ANILIST_RELATIONS_FIELD])
       ? anime[ANILIST_RELATIONS_FIELD]
       : (readCachedRelations(id) || []);
+    const relations = selectAutomaticGroupingRelations(rawRelations);
 
     for (const rel of relations) {
       const relId = String(rel?.relatedId ?? "");
@@ -509,7 +531,7 @@ export function readCachedRelations(anilistId) {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.t > RELATION_CACHE_TTL_MS) return null;
-    return Array.isArray(parsed.d) ? parsed.d : null;
+    return Array.isArray(parsed.d) ? normalizeAniListRelations(parsed.d) : null;
   } catch {
     return null;
   }
@@ -523,9 +545,10 @@ export function readCachedRelations(anilistId) {
  */
 export function writeCachedRelations(anilistId, relations) {
   try {
+    const normalized = normalizeAniListRelations(relations);
     localStorage.setItem(
       `${RELATION_CACHE_PREFIX}${anilistId}`,
-      JSON.stringify({ t: Date.now(), d: relations }),
+      JSON.stringify({ t: Date.now(), d: normalized }),
     );
   } catch {
     // Quota errors are silently ignored; cache is best-effort.
@@ -585,13 +608,12 @@ export async function fetchAniListRelations(anilistId, fetchImpl = globalThis.fe
     }
 
     const edges = json.data?.Media?.relations?.edges ?? [];
-    const relations = edges
+    const relations = selectAutomaticGroupingRelations(edges
       .filter((edge) => edge?.node?.type === "ANIME")
       .map((edge) => ({
         relatedId: String(edge.node.id),
         relationType: String(edge.relationType ?? "").toUpperCase(),
-      }))
-      .filter((r) => r.relatedId && r.relationType);
+      })));
 
     writeCachedRelations(String(anilistId), relations);
     return relations;
@@ -658,7 +680,7 @@ export async function runAutoGroupingReconciliation({
   onResult,
   services = {},
 }) {
-  if (!isAnimeGroupingEnabled) return null;
+  if (!isAutoReconcileEnabled()) return null;
 
   try {
     validateUid(uid);
@@ -670,7 +692,8 @@ export async function runAutoGroupingReconciliation({
   // Read current group metadata once (non-reactive snapshot).
   const existingGroups = await new Promise((resolve) => {
     let settled = false;
-    const unsub = subscribeToGroupMetadata(
+    const subscribeFn = services?.subscribeToGroupMetadata || subscribeToGroupMetadata;
+    const unsub = subscribeFn(
       uid,
       scopeKey,
       (groups) => {

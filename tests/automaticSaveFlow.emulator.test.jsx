@@ -94,17 +94,17 @@ describe("automatic grouping through the real save flow", () => {
   it("creates on the second related save and expands on the third without duplicates", async () => {
     render(<AutomaticSaveHarness userId={uid} />);
 
-    await addToWatchlist(uid, anime("synthetic-101", "Synthetic Saga I", [
-      { relatedId: "synthetic-102", relationType: "SEQUEL" },
+    await addToWatchlist(uid, anime("900000101", "Synthetic Saga I", [
+      { relatedId: "900000102", relationType: "SEQUEL" },
     ]));
 
     await waitFor(async () => {
       expect((await loadGroups()).size).toBe(0);
     });
 
-    await addToWatchlist(uid, anime("synthetic-102", "Synthetic Saga II", [
-      { relatedId: "synthetic-101", relationType: "PREQUEL" },
-      { relatedId: "synthetic-103", relationType: "SEQUEL" },
+    await addToWatchlist(uid, anime("900000102", "Synthetic Saga II", [
+      { relatedId: "900000101", relationType: "PREQUEL" },
+      { relatedId: "900000103", relationType: "SEQUEL" },
     ]));
 
     let groupId;
@@ -116,8 +116,8 @@ describe("automatic grouping through the real save flow", () => {
       expect((await loadMembers(groupId)).size).toBe(2);
     }, { timeout: 10_000 });
 
-    await addToWatchlist(uid, anime("synthetic-103", "Synthetic Saga III", [
-      { relatedId: "synthetic-102", relationType: "PREQUEL" },
+    await addToWatchlist(uid, anime("900000103", "Synthetic Saga III", [
+      { relatedId: "900000102", relationType: "PREQUEL" },
     ]));
 
     await waitFor(async () => {

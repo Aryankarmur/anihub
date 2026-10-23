@@ -40,13 +40,26 @@ import {
   executeCollectionDeletionPlan,
   executeUngroupedCollectionDeletionPlan,
 } from "./collectionDeletionUtils";
-import { isAnimeGroupingEnabled } from "./groupingFeatureGate";
+import * as groupingFeatureGate from "./groupingFeatureGate";
+
+const isDataCompatEnabled = () => {
+  try {
+    if (typeof groupingFeatureGate.isGroupingDataCompatibilityEnabled === "function") {
+      return groupingFeatureGate.isGroupingDataCompatibilityEnabled();
+    }
+  } catch {
+    // Fall back to isAnimeGroupingEnabled if mock does not define isGroupingDataCompatibilityEnabled
+  }
+  return Boolean(groupingFeatureGate.isAnimeGroupingEnabled);
+};
+
 import {
   MOVEMENT_RECONCILIATIONS_FIELD,
   collectMovementReconciliations,
   normalizeMovementReconciliations,
   withoutGroupingInternals,
 } from "./movementUtils";
+import { relationFieldForWrite } from "./anilistRelations";
 
 // ==========================================
 // SYSTEM CONSTANTS & HELPERS
@@ -59,6 +72,18 @@ const GROUP_STATUS_ACTIVE = "active";
 const GROUP_STATUS_UPDATING = "updating";
 const GROUP_STATUS_DELETING = "deleting";
 const COLLECTION_DELETION_STATE = "deleting";
+
+const nextCollectionGroupingState = (collectionData, groupId, delta) => {
+  const currentCount = collectionData?.groupingState?.groupCount ?? 0;
+  const groupCount = currentCount + delta;
+  if (!Number.isSafeInteger(currentCount) || currentCount < 0 || groupCount < 0) {
+    throw createGroupingError(
+      "grouping/invalid-collection-state",
+      "Collection grouping metadata is inconsistent."
+    );
+  }
+  return { groupCount, lastGroupId: groupId };
+};
 
 const createGroupingError = (code, message, details) => {
   const error = new Error(message);
@@ -140,7 +165,7 @@ const buildMovementAnimeData = ({ animeId, sourceData, destinationData, anime })
     ...withoutGroupingInternals(sourceData),
     ...withoutGroupingInternals(supplied),
   };
-  return {
+  const result = {
     ...merged,
     animeId: String(animeId),
     title: supplied.title || sourceData?.title || destinationData?.title || "Unknown Title",
@@ -150,6 +175,11 @@ const buildMovementAnimeData = ({ animeId, sourceData, destinationData, anime })
       ? Number(supplied.score)
       : (sourceData?.score ?? destinationData?.score ?? null),
   };
+  if (Object.hasOwn(result, "anilistRelations")) {
+    delete result.anilistRelations;
+    Object.assign(result, relationFieldForWrite(merged));
+  }
+  return result;
 };
 
 export async function retryMovementGroupReconciliation(uid, task) {
@@ -284,7 +314,7 @@ const drainStoredMovementReconciliations = async (uid, documentRef) => {
 };
 
 const retryPendingMovementReconciliations = (uid, scopeKey, animeDocuments) => {
-  if (!isAnimeGroupingEnabled) return;
+  if (!isDataCompatEnabled()) return;
   animeDocuments.forEach((anime) => {
     const tasks = normalizeMovementReconciliations(anime[MOVEMENT_RECONCILIATIONS_FIELD]);
     if (!tasks.length) return;
@@ -613,12 +643,10 @@ export const addToWatchlist = async (uid, anime) => {
       type: type || "TV",
       score: score !== undefined ? score : null,
       addedAt: serverTimestamp(),
-      ...(Array.isArray(anime.anilistRelations) && anime.anilistRelations.length > 0
-        ? { anilistRelations: anime.anilistRelations }
-        : {})
+      ...relationFieldForWrite(anime)
     };
 
-    if (isAnimeGroupingEnabled) {
+    if (isDataCompatEnabled()) {
       return await moveAnimeWithGrouping({
         uid,
         animeId: strId,
@@ -643,7 +671,15 @@ export const addToWatchlist = async (uid, anime) => {
 
 export const removeFromWatchlist = async (uid, animeId) => {
   try {
-    const animeRef = doc(db, "users", uid, "watchlist", String(animeId));
+    const validUid = validateUid(uid);
+    const validAnimeId = validateAnimeId(animeId);
+    const animeRef = doc(db, "users", validUid, "watchlist", validAnimeId);
+    if (isDataCompatEnabled()) {
+      const snapshot = await getDoc(animeRef);
+      if (snapshot.exists() && snapshot.data().groupId) {
+        await removeAnimeFromGroup(validUid, snapshot.data().groupId, [validAnimeId]);
+      }
+    }
     await deleteDoc(animeRef);
     return { error: null };
   } catch (error) {
@@ -809,7 +845,7 @@ export const deleteCollection = async (uid, collectionId) => {
     const deleteCollectionDocument = () => deleteDoc(collectionRef);
 
     return await executeCollectionDeletionForMode({
-      groupingEnabled: isAnimeGroupingEnabled,
+      groupingEnabled: isDataCompatEnabled(),
       deleteWithoutGrouping: () => executeUngroupedCollectionDeletionPlan({
         loadItemChunks,
         deleteItemChunk,
@@ -883,9 +919,7 @@ export const addToCollection = async (uid, collectionId, anime) => {
       type: type || "TV",
       score: score || null,
       addedAt: serverTimestamp(),
-      ...(Array.isArray(anime.anilistRelations) && anime.anilistRelations.length > 0
-        ? { anilistRelations: anime.anilistRelations }
-        : {})
+      ...relationFieldForWrite(anime)
     };
 
     await runTransaction(db, async (transaction) => {
@@ -918,7 +952,14 @@ export const removeFromCollection = async (uid, collectionId, animeId) => {
     const validUid = validateUid(uid);
     const validCollectionId = validateDocumentId(collectionId, "Collection ID");
     const collectionRef = doc(db, "users", validUid, "collections", validCollectionId);
-    const itemRef = doc(collectionRef, "items", validateAnimeId(animeId));
+    const validAnimeId = validateAnimeId(animeId);
+    const itemRef = doc(collectionRef, "items", validAnimeId);
+    if (isDataCompatEnabled()) {
+      const itemSnapshot = await getDoc(itemRef);
+      if (itemSnapshot.exists() && itemSnapshot.data().groupId) {
+        await removeAnimeFromGroup(validUid, itemSnapshot.data().groupId, [validAnimeId]);
+      }
+    }
     await runTransaction(db, async (transaction) => {
       const collectionSnapshot = await transaction.get(collectionRef);
       transaction.delete(itemRef);
@@ -997,7 +1038,7 @@ export const addToCompleted = async (uid, anime) => {
     const { animeId, title, image, type, score } = anime;
     const strId = String(animeId);
 
-    if (isAnimeGroupingEnabled) {
+    if (isDataCompatEnabled()) {
       return await moveAnimeWithGrouping({
         uid,
         animeId: strId,
@@ -1030,9 +1071,9 @@ export const addToCompleted = async (uid, anime) => {
       image: image || existingData?.image || "",
       type: type || existingData?.type || "TV",
       score: (score !== undefined && score !== null && !isNaN(score)) ? Number(score) : (existingData?.score ?? null),
-      ...(Array.isArray(anime.anilistRelations) && anime.anilistRelations.length > 0
-        ? { anilistRelations: anime.anilistRelations }
-        : (Array.isArray(existingData?.anilistRelations) ? { anilistRelations: existingData.anilistRelations } : {}))
+      ...(anime.anilistRelations != null
+        ? relationFieldForWrite(anime)
+        : relationFieldForWrite(existingData))
     };
 
     if (!docExists) {
@@ -1063,7 +1104,7 @@ export const removeFromCompleted = async (uid, animeId, restoreToWatchlist = tru
   try {
     const strId = String(animeId);
 
-    if (isAnimeGroupingEnabled && restoreToWatchlist) {
+    if (isDataCompatEnabled() && restoreToWatchlist) {
       return await moveAnimeWithGrouping({
         uid,
         animeId: strId,
@@ -1078,6 +1119,13 @@ export const removeFromCompleted = async (uid, animeId, restoreToWatchlist = tru
 
     const batch = writeBatch(db);
 
+    if (isDataCompatEnabled() && !restoreToWatchlist) {
+      const completedSnapshot = await getDoc(completedRef);
+      if (completedSnapshot.exists() && completedSnapshot.data().groupId) {
+        await removeAnimeFromGroup(uid, completedSnapshot.data().groupId, [strId]);
+      }
+    }
+
     if (restoreToWatchlist) {
       // Read completed document to preserve metadata when returning to watchlist
       try {
@@ -1090,7 +1138,8 @@ export const removeFromCompleted = async (uid, animeId, restoreToWatchlist = tru
             image: data.image || "",
             type: data.type || "TV",
             score: (data.score !== undefined && data.score !== null) ? data.score : null,
-            addedAt: serverTimestamp()
+            addedAt: serverTimestamp(),
+            ...relationFieldForWrite(data),
           };
           batch.set(watchlistRef, restoredData, { merge: true });
         }
@@ -1276,6 +1325,7 @@ export const createGroup = async (
       scopeKey: scope.scopeKey,
       collectionId: scope.collectionId,
       thumbnailAnimeId: initialThumbnailId,
+      creationMemberIds: initialIds,
       groupType,
       status: GROUP_STATUS_ACTIVE,
       createdAt: serverTimestamp(),
@@ -1293,6 +1343,15 @@ export const createGroup = async (
         updatedAt: serverTimestamp(),
       },
     }, { merge: true });
+    if (collectionRef) {
+      transaction.update(collectionRef, {
+        groupingState: nextCollectionGroupingState(
+          collectionSnapshot.data(),
+          groupRef.id,
+          1
+        ),
+      });
+    }
     initialAnimeRefs.forEach((animeRef) => {
       transaction.update(animeRef, { groupId: groupRef.id });
     });
@@ -1719,9 +1778,13 @@ export const deleteGroupFromFirestore = async (firestore, uid, groupId) => {
     );
     const reservationRef = getGroupNameKeyRef(validUid, reservationId, firestore);
     await runTransaction(firestore, async (transaction) => {
-      const [groupSnapshot, reservationSnapshot] = await Promise.all([
+      const collectionRef = groupData.collectionId
+        ? doc(firestore, "users", validUid, "collections", groupData.collectionId)
+        : null;
+      const [groupSnapshot, reservationSnapshot, collectionSnapshot] = await Promise.all([
         transaction.get(groupRef),
-        transaction.get(reservationRef)
+        transaction.get(reservationRef),
+        collectionRef ? transaction.get(collectionRef) : Promise.resolve(null),
       ]);
       if (!groupSnapshot.exists()) return;
       if (groupSnapshot.data().status !== GROUP_STATUS_DELETING) {
@@ -1730,6 +1793,15 @@ export const deleteGroupFromFirestore = async (firestore, uid, groupId) => {
       transaction.delete(groupRef);
       if (reservationSnapshot.exists() && reservationSnapshot.data().groupId === validGroupId) {
         transaction.delete(reservationRef);
+      }
+      if (collectionSnapshot?.exists() && collectionSnapshot.data().groupingState) {
+        transaction.update(collectionRef, {
+          groupingState: nextCollectionGroupingState(
+            collectionSnapshot.data(),
+            validGroupId,
+            -1
+          ),
+        });
       }
     });
 

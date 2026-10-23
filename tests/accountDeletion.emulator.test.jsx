@@ -30,34 +30,63 @@ let proposedEnv;
 
 const userRef = (db, uid) => doc(db, "users", uid);
 const animeRef = (db, uid, scope, animeId) => doc(db, "users", uid, scope, animeId);
+const scopedAnimeRef = (db, uid, scopeKey, animeId) => (
+  scopeKey.startsWith("collection:")
+    ? doc(
+      db,
+      "users",
+      uid,
+      "collections",
+      scopeKey.slice("collection:".length),
+      "items",
+      animeId,
+    )
+    : animeRef(db, uid, scopeKey, animeId)
+);
 const groupRef = (db, uid, groupId) => doc(db, "users", uid, "groups", groupId);
 const reservationRef = (db, uid, reservationId) => (
   doc(db, "users", uid, "groupNameKeys", reservationId)
 );
 
-async function seedGroup(db, uid, groupId, memberIds, { groupType = "manual" } = {}) {
+async function seedGroup(
+  db,
+  uid,
+  groupId,
+  memberIds,
+  { groupType = "manual", scopeKey = "watchlist" } = {},
+) {
   const normalizedName = `group ${groupId}`;
-  const reservationId = await getGroupNameReservationId("watchlist", normalizedName);
+  const reservationId = await getGroupNameReservationId(scopeKey, normalizedName);
+  const collectionId = scopeKey.startsWith("collection:")
+    ? scopeKey.slice("collection:".length)
+    : null;
+  if (collectionId) {
+    await setDoc(doc(db, "users", uid, "collections", collectionId), {
+      name: `Collection ${collectionId}`,
+      groupingState: { groupCount: 1, lastGroupId: groupId },
+    });
+  }
   await setDoc(groupRef(db, uid, groupId), {
     name: `Group ${groupId}`,
     normalizedName,
     reservationId,
-    scopeKey: "watchlist",
-    collectionId: null,
+    scopeKey,
+    collectionId,
     thumbnailAnimeId: memberIds[0],
+    creationMemberIds: memberIds.slice(0, 2),
     groupType,
     status: "active",
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
   });
   await setDoc(reservationRef(db, uid, reservationId), {
-    scopeKey: "watchlist",
+    scopeKey,
     normalizedName,
     groupId,
     createdAt: new Date("2026-01-01T00:00:00Z"),
   });
   for (const animeId of memberIds) {
-    await setDoc(animeRef(db, uid, "watchlist", animeId), {
+    await setDoc(scopedAnimeRef(db, uid, scopeKey, animeId), {
       animeId,
       title: `Anime ${animeId}`,
       groupId,
@@ -148,6 +177,26 @@ describe("account deletion compatibility", () => {
 
     expect(result.data.mode).toBe("group-aware");
     expect(result.data.deletedGroupIds).toHaveLength(2);
+    await assertUserDataGone(proposedEnv, uid);
+  });
+
+  it("deletes grouped custom Collections while decrementing their integrity counter", async () => {
+    const uid = "grouped-collection-user";
+    await proposedEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(userRef(db, uid), { groupingState: { hasData: true } });
+      await seedGroup(db, uid, "collection-group", ["1", "2"], {
+        scopeKey: "collection:favorites",
+      });
+    });
+
+    const result = await deleteUserDataFromFirestore(
+      proposedEnv.authenticatedContext(uid).firestore(),
+      uid,
+    );
+
+    expect(result.data.deletedGroupIds).toEqual(["collection-group"]);
+    expect(result.data.deletedCollectionItems).toBe(2);
     await assertUserDataGone(proposedEnv, uid);
   });
 
