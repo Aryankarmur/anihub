@@ -1,0 +1,442 @@
+// PROPOSED LOCAL RULESET FOR F01 VERIFICATION ONLY.
+// The deployed Firebase Console rules were not available for comparison.
+// Do not deploy this file until it has been reviewed against production rules.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function hasGroupId(data) {
+      return data.keys().hasAny(['groupId']);
+    }
+
+    function isDeletingCollection(data) {
+      return data.keys().hasAny(['deletionState']) && data.deletionState == 'deleting';
+    }
+
+    function collectionAfter(uid, collectionId) {
+      return getAfter(/databases/$(database)/documents/users/$(uid)/collections/$(collectionId));
+    }
+
+    function validMovementTask(task, animeId) {
+      return task is map
+        && task.keys().hasOnly(['sourceScope', 'sourceGroupId', 'animeId'])
+        && task.sourceScope in ['watchlist', 'completed']
+        && task.sourceGroupId is string
+        && task.sourceGroupId.size() > 0
+        && !task.sourceGroupId.matches('.*[/].*')
+        && task.animeId is string
+        && task.animeId == animeId;
+    }
+
+    function validMovementTaskList(data, animeId) {
+      return !data.keys().hasAny(['_groupingReconciliations'])
+        || (
+          data._groupingReconciliations is list
+          && data._groupingReconciliations.size() > 0
+          && data._groupingReconciliations.size() <= 8
+          && validMovementTask(data._groupingReconciliations[0], animeId)
+          && (data._groupingReconciliations.size() < 2 || validMovementTask(data._groupingReconciliations[1], animeId))
+          && (data._groupingReconciliations.size() < 3 || validMovementTask(data._groupingReconciliations[2], animeId))
+          && (data._groupingReconciliations.size() < 4 || validMovementTask(data._groupingReconciliations[3], animeId))
+          && (data._groupingReconciliations.size() < 5 || validMovementTask(data._groupingReconciliations[4], animeId))
+          && (data._groupingReconciliations.size() < 6 || validMovementTask(data._groupingReconciliations[5], animeId))
+          && (data._groupingReconciliations.size() < 7 || validMovementTask(data._groupingReconciliations[6], animeId))
+          && (data._groupingReconciliations.size() < 8 || validMovementTask(data._groupingReconciliations[7], animeId))
+        );
+    }
+
+    // A reconciliation marker is executable cleanup work, not ordinary anime
+    // metadata.  A marker may only be introduced by the same atomic
+    // Watchlist <-> Completed transfer that removes the source document.  On
+    // a later reverse transfer, previously persisted tasks may be carried
+    // forward from that source document.  This prevents a direct client write
+    // from inventing cleanup work for an arbitrary group.
+    function taskMatches(task, candidate) {
+      return task.sourceScope == candidate.sourceScope
+        && task.sourceGroupId == candidate.sourceGroupId
+        && task.animeId == candidate.animeId;
+    }
+
+    function taskExistsIn(data, task, animeId) {
+      return data.keys().hasAny(['_groupingReconciliations'])
+        && data._groupingReconciliations is list
+        && data._groupingReconciliations.size() > 0
+        && validMovementTask(task, animeId)
+        && (
+          taskMatches(task, data._groupingReconciliations[0])
+          || (data._groupingReconciliations.size() > 1 && taskMatches(task, data._groupingReconciliations[1]))
+          || (data._groupingReconciliations.size() > 2 && taskMatches(task, data._groupingReconciliations[2]))
+          || (data._groupingReconciliations.size() > 3 && taskMatches(task, data._groupingReconciliations[3]))
+          || (data._groupingReconciliations.size() > 4 && taskMatches(task, data._groupingReconciliations[4]))
+          || (data._groupingReconciliations.size() > 5 && taskMatches(task, data._groupingReconciliations[5]))
+          || (data._groupingReconciliations.size() > 6 && taskMatches(task, data._groupingReconciliations[6]))
+          || (data._groupingReconciliations.size() > 7 && taskMatches(task, data._groupingReconciliations[7]))
+        );
+    }
+
+    function counterpartWasMoved(uid, destinationScope, animeId) {
+      return (
+        destinationScope == 'watchlist'
+        && exists(/databases/$(database)/documents/users/$(uid)/completed/$(animeId))
+        && !existsAfter(/databases/$(database)/documents/users/$(uid)/completed/$(animeId))
+      ) || (
+        destinationScope == 'completed'
+        && exists(/databases/$(database)/documents/users/$(uid)/watchlist/$(animeId))
+        && !existsAfter(/databases/$(database)/documents/users/$(uid)/watchlist/$(animeId))
+      );
+    }
+
+    function taskProvenancedByCounterpart(uid, destinationScope, animeId, task) {
+      return counterpartWasMoved(uid, destinationScope, animeId)
+        && (
+          (
+            destinationScope == 'watchlist'
+            && (
+              taskExistsIn(
+                get(/databases/$(database)/documents/users/$(uid)/completed/$(animeId)).data,
+                task,
+                animeId
+              )
+              || (
+                task.sourceScope == 'completed'
+                && get(/databases/$(database)/documents/users/$(uid)/completed/$(animeId)).data.groupId == task.sourceGroupId
+              )
+            )
+          ) || (
+            destinationScope == 'completed'
+            && (
+              taskExistsIn(
+                get(/databases/$(database)/documents/users/$(uid)/watchlist/$(animeId)).data,
+                task,
+                animeId
+              )
+              || (
+                task.sourceScope == 'watchlist'
+                && get(/databases/$(database)/documents/users/$(uid)/watchlist/$(animeId)).data.groupId == task.sourceGroupId
+              )
+            )
+          )
+        );
+    }
+
+    function validReconciliationTaskTransition(uid, destinationScope, animeId, task) {
+      return taskExistsIn(resource.data, task, animeId)
+        || taskProvenancedByCounterpart(uid, destinationScope, animeId, task);
+    }
+
+    function validReconciliationTaskTransitions(uid, destinationScope, animeId) {
+      return !request.resource.data.keys().hasAny(['_groupingReconciliations'])
+        || (
+          validReconciliationTaskTransition(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[0]
+          )
+          && (request.resource.data._groupingReconciliations.size() < 2 || validReconciliationTaskTransition(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[1]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 3 || validReconciliationTaskTransition(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[2]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 4 || validReconciliationTaskTransition(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[3]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 5 || validReconciliationTaskTransition(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[4]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 6 || validReconciliationTaskTransition(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[5]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 7 || validReconciliationTaskTransition(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[6]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 8 || validReconciliationTaskTransition(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[7]
+          ))
+        );
+    }
+
+    function validNewReconciliationTasks(uid, destinationScope, animeId) {
+      return !request.resource.data.keys().hasAny(['_groupingReconciliations'])
+        || (
+          taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[0]
+          )
+          && (request.resource.data._groupingReconciliations.size() < 2 || taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[1]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 3 || taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[2]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 4 || taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[3]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 5 || taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[4]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 6 || taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[5]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 7 || taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[6]
+          ))
+          && (request.resource.data._groupingReconciliations.size() < 8 || taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[7]
+          ))
+        );
+    }
+
+    function validScope(scopeKey) {
+      return scopeKey == 'watchlist'
+        || scopeKey == 'completed'
+        || scopeKey.matches('^collection:[^/]+$');
+    }
+
+    function expectedReservationId(scopeKey, normalizedName) {
+      return hashing.sha256(
+        (string(scopeKey.size()) + ':' + scopeKey + normalizedName).toUtf8()
+      ).toHexString();
+    }
+
+    function validOperation(data) {
+      return !data.keys().hasAny(['membershipOperation'])
+        || (
+          data.membershipOperation is map
+          && data.membershipOperation.keys().hasOnly(['type', 'key'])
+          && data.membershipOperation['type'] == 'remove'
+          && data.membershipOperation['key'] is string
+          && data.membershipOperation['key'].size() == 64
+        );
+    }
+
+    function validGroupMetadata(data) {
+      return data.keys().hasAll([
+          'name', 'normalizedName', 'reservationId', 'scopeKey',
+          'collectionId', 'thumbnailAnimeId', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'name', 'normalizedName', 'reservationId', 'scopeKey',
+          'collectionId', 'thumbnailAnimeId', 'status', 'createdAt', 'updatedAt',
+          'membershipOperation'
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.normalizedName is string
+        && data.normalizedName.size() > 0
+        && data.normalizedName.size() <= 80
+        && data.reservationId is string
+        && data.reservationId.size() == 64
+        && data.reservationId == expectedReservationId(data.scopeKey, data.normalizedName)
+        && validScope(data.scopeKey)
+        && (
+          (data.scopeKey in ['watchlist', 'completed'] && data.collectionId == null)
+          || (
+            data.collectionId is string
+            && data.collectionId.size() > 0
+            && data.scopeKey == 'collection:' + data.collectionId
+          )
+        )
+        && (data.thumbnailAnimeId == null || data.thumbnailAnimeId is string)
+        && data.status in ['active', 'updating', 'deleting']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && validOperation(data)
+        && (
+          (data.status == 'updating' && data.keys().hasAny(['membershipOperation']))
+          || (data.status != 'updating' && !data.keys().hasAny(['membershipOperation']))
+        );
+    }
+
+    function reservationAfter(uid, reservationId) {
+      return getAfter(/databases/$(database)/documents/users/$(uid)/groupNameKeys/$(reservationId));
+    }
+
+    function groupAfter(uid, groupId) {
+      return getAfter(/databases/$(database)/documents/users/$(uid)/groups/$(groupId));
+    }
+
+    function reservationMatchesGroup(uid, groupId, data) {
+      return reservationAfter(uid, data.reservationId).data.groupId == groupId
+        && reservationAfter(uid, data.reservationId).data.scopeKey == data.scopeKey
+        && reservationAfter(uid, data.reservationId).data.normalizedName == data.normalizedName;
+    }
+
+    function validStatusTransition(before, after) {
+      return (before == 'active' && after in ['active', 'updating', 'deleting'])
+        || (before == 'updating' && after in ['active', 'updating', 'deleting'])
+        || (before == 'deleting' && after == 'deleting');
+    }
+
+    function validNewGroupAssignment(uid, expectedScope, groupId) {
+      return groupId is string
+        && groupAfter(uid, groupId).data.status == 'active'
+        && groupAfter(uid, groupId).data.scopeKey == expectedScope
+        && groupAfter(uid, groupId).data.updatedAt == request.time;
+    }
+
+    function validAnimeCreate(uid, expectedScope, animeId) {
+      return validMovementTaskList(request.resource.data, animeId)
+        && (
+          !request.resource.data.keys().hasAny(['_groupingReconciliations'])
+          || validNewReconciliationTasks(uid, expectedScope, animeId)
+        )
+        && (
+          !hasGroupId(request.resource.data)
+          || validNewGroupAssignment(uid, expectedScope, request.resource.data.groupId)
+        );
+    }
+
+    function validAnimeUpdate(uid, expectedScope, animeId) {
+      return validMovementTaskList(request.resource.data, animeId)
+        && (
+          !request.resource.data.keys().hasAny(['_groupingReconciliations'])
+          || validReconciliationTaskTransitions(uid, expectedScope, animeId)
+        )
+        && (!hasGroupId(request.resource.data)
+        || (
+          hasGroupId(resource.data)
+          && request.resource.data.groupId == resource.data.groupId
+        )
+        || (
+          !hasGroupId(resource.data)
+          && validNewGroupAssignment(uid, expectedScope, request.resource.data.groupId)
+        ));
+    }
+
+    function validReservationData(reservationId, data) {
+      return data.keys().hasAll(['scopeKey', 'normalizedName', 'groupId', 'createdAt'])
+        && data.keys().hasOnly(['scopeKey', 'normalizedName', 'groupId', 'createdAt'])
+        && validScope(data.scopeKey)
+        && data.normalizedName is string
+        && data.normalizedName.size() > 0
+        && data.normalizedName.size() <= 80
+        && data.groupId is string
+        && expectedReservationId(data.scopeKey, data.normalizedName) == reservationId
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{uid} {
+      allow read, create, update, delete: if isOwner(uid);
+
+      match /watchlist/{animeId} {
+        allow read, delete: if isOwner(uid);
+        allow create: if isOwner(uid) && validAnimeCreate(uid, 'watchlist', animeId);
+        allow update: if isOwner(uid) && validAnimeUpdate(uid, 'watchlist', animeId);
+      }
+
+      match /completed/{animeId} {
+        allow read, delete: if isOwner(uid);
+        allow create: if isOwner(uid) && validAnimeCreate(uid, 'completed', animeId);
+        allow update: if isOwner(uid) && validAnimeUpdate(uid, 'completed', animeId);
+      }
+
+      match /collections/{collectionId} {
+        allow read, create, delete: if isOwner(uid);
+        allow update: if isOwner(uid)
+          && (!isDeletingCollection(resource.data) || isDeletingCollection(request.resource.data));
+
+        match /items/{animeId} {
+          allow read, delete: if isOwner(uid);
+          allow create: if isOwner(uid)
+            && !isDeletingCollection(collectionAfter(uid, collectionId).data)
+            && validAnimeCreate(uid, 'collection:' + collectionId, animeId);
+          allow update: if isOwner(uid)
+            && (
+              (
+                !isDeletingCollection(collectionAfter(uid, collectionId).data)
+                && validAnimeUpdate(uid, 'collection:' + collectionId, animeId)
+              )
+              || (
+                isDeletingCollection(collectionAfter(uid, collectionId).data)
+                && resource.data.keys().hasAny(['groupId'])
+                && !request.resource.data.keys().hasAny(['groupId'])
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['groupId'])
+              )
+            );
+        }
+      }
+
+      match /groups/{groupId} {
+        allow read: if isOwner(uid);
+
+        allow create: if isOwner(uid)
+          && validGroupMetadata(request.resource.data)
+          && request.resource.data.status == 'active'
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && (
+            request.resource.data.collectionId == null
+            || !isDeletingCollection(
+              collectionAfter(uid, request.resource.data.collectionId).data
+            )
+          )
+          && reservationMatchesGroup(uid, groupId, request.resource.data);
+
+        allow update: if isOwner(uid)
+          && validGroupMetadata(request.resource.data)
+          && request.resource.data.scopeKey == resource.data.scopeKey
+          && request.resource.data.createdAt == resource.data.createdAt
+          && validStatusTransition(resource.data.status, request.resource.data.status)
+          && (
+            request.resource.data.collectionId == null
+            || !isDeletingCollection(collectionAfter(uid, request.resource.data.collectionId).data)
+            || (
+              request.resource.data.status == 'deleting'
+              && request.resource.data.name == resource.data.name
+              && request.resource.data.normalizedName == resource.data.normalizedName
+              && request.resource.data.reservationId == resource.data.reservationId
+              && request.resource.data.thumbnailAnimeId == resource.data.thumbnailAnimeId
+            )
+          )
+          && (
+            (
+              request.resource.data.reservationId == resource.data.reservationId
+              && request.resource.data.normalizedName == resource.data.normalizedName
+            )
+            || (
+              resource.data.status == 'active'
+              && request.resource.data.status == 'active'
+              && reservationMatchesGroup(uid, groupId, request.resource.data)
+              && !existsAfter(
+                /databases/$(database)/documents/users/$(uid)/groupNameKeys/$(resource.data.reservationId)
+              )
+            )
+          );
+
+        allow delete: if isOwner(uid)
+          && !existsAfter(
+            /databases/$(database)/documents/users/$(uid)/groupNameKeys/$(resource.data.reservationId)
+          );
+      }
+
+      match /groupNameKeys/{reservationId} {
+        allow read: if isOwner(uid);
+
+        allow create: if isOwner(uid)
+          && validReservationData(reservationId, request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && groupAfter(uid, request.resource.data.groupId).data.reservationId == reservationId
+          && groupAfter(uid, request.resource.data.groupId).data.scopeKey == request.resource.data.scopeKey
+          && groupAfter(uid, request.resource.data.groupId).data.normalizedName == request.resource.data.normalizedName;
+
+        allow update: if isOwner(uid)
+          && validReservationData(reservationId, request.resource.data)
+          && request.resource.data.groupId == resource.data.groupId
+          && request.resource.data.scopeKey == resource.data.scopeKey
+          && request.resource.data.normalizedName == resource.data.normalizedName
+          && request.resource.data.createdAt == resource.data.createdAt
+          && groupAfter(uid, request.resource.data.groupId).data.reservationId == reservationId;
+
+        allow delete: if isOwner(uid)
+          && (
+            !existsAfter(
+              /databases/$(database)/documents/users/$(uid)/groups/$(resource.data.groupId)
+            )
+            || groupAfter(uid, resource.data.groupId).data.reservationId != reservationId
+          );
+      }
+    }
+  }
+}

@@ -128,6 +128,28 @@
   transform: translateY(-2px);
 }
 
+.anime-info .info-div .btns #btn-completed {
+  background: var(--bg-2);
+  color: var(--text-0);
+  border: 1px solid var(--bg-3);
+}
+
+.anime-info .info-div .btns #btn-completed:hover {
+  background: var(--bg-3);
+  border-color: var(--text-2);
+}
+
+.anime-info .info-div .btns #btn-completed.saved {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success);
+  border: 1px solid var(--success);
+}
+
+.anime-info .info-div .btns #btn-completed.saved:hover {
+  background: rgba(74, 222, 128, 0.25);
+  transform: translateY(-2px);
+}
+
 .watchlist-error {
   color: var(--danger);
   font-size: 0.85rem;

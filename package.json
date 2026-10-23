@@ -5,8 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:grouping-preview": "vite --mode grouping-preview --host 127.0.0.1",
+    "emulators:preview": "firebase emulators:start --project demo-anihub-f01 --only auth,firestore",
+    "seed:preview": "node scripts/seedGroupingPreview.mjs --project=demo-anihub-f01 --auth-host=127.0.0.1:9099 --firestore-host=127.0.0.1:8080",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "node --test tests/groupingUtils.test.js",
+    "test:components": "vitest run tests/groupingComponents.test.jsx",
+    "test:controller": "vitest run tests/useAnimeGrouping.test.jsx",
+    "test:watchlist": "vitest run tests/watchlistGroupingIntegration.test.jsx",
+    "test:collections": "vitest run tests/customCollectionGroupingIntegration.test.jsx",
+    "test:collection-deletion": "vitest run tests/collectionDeletionSafety.test.js tests/collectionDeletionService.test.js",
+    "test:completed": "vitest run tests/completedGroupingIntegration.test.jsx tests/completedMovement.test.js",
+    "test:f02": "vitest run tests/f02MovementLegacy.test.js",
+    "test:emulator": "firebase emulators:exec --project demo-anihub-f01 --only firestore \"node --test tests/groupingFirestore.emulator.test.js\"",
+    "test:preview-config": "node --test tests/groupingPreviewConfig.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -18,6 +31,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
@@ -25,6 +41,8 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
-    "vite": "^8.0.12"
+    "jsdom": "^30.1.3",
+    "vite": "^8.0.12",
+    "vitest": "^5.0.5"
   }
 }

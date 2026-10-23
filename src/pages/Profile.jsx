@@ -4,7 +4,12 @@ import { useAuth } from "../context/AuthContext";
 import { updateProfile } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
-import { getWatchlistCount, getCollectionCount, deleteUserData } from "../firebase/firestore";
+import { 
+  getWatchlistCount, 
+  getCollectionCount, 
+  getCompletedCount,
+  deleteUserData 
+} from "../firebase/firestore";
 import { deleteUserAccount, reauthenticateUser } from "../firebase/auth";
 import "../assets/css/Profile.css";
 import "../assets/css/CollectionModal.css";
@@ -13,7 +18,7 @@ const Profile = () => {
   const { currentUser, logout, resetPassword, updateUser } = useAuth();
   const navigate = useNavigate();
 
-  const [stats, setStats] = useState({ watchlist: 0, collections: 0 });
+  const [stats, setStats] = useState({ watchlist: 0, collections: 0, completed: 0 });
   const [statsLoading, setStatsLoading] = useState(true);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -39,14 +44,16 @@ const Profile = () => {
     setStatsLoading(true);
     
     try {
-      const [watchRes, collRes] = await Promise.all([
+      const [watchRes, collRes, compRes] = await Promise.allSettled([
         getWatchlistCount(currentUser.uid),
-        getCollectionCount(currentUser.uid)
+        getCollectionCount(currentUser.uid),
+        getCompletedCount(currentUser.uid)
       ]);
       
       setStats({
-        watchlist: watchRes.data || 0,
-        collections: collRes.data || 0
+        watchlist: watchRes.status === "fulfilled" ? (watchRes.value?.data || 0) : 0,
+        collections: collRes.status === "fulfilled" ? (collRes.value?.data || 0) : 0,
+        completed: compRes.status === "fulfilled" ? (compRes.value?.data || 0) : 0
       });
     } catch (error) {
       console.error("Failed to load stats", error);
@@ -223,6 +230,10 @@ const Profile = () => {
             <span className="stat-label">Watchlist</span>
           </div>
           <div className="stat-card">
+            <span className="stat-number">{statsLoading ? "-" : stats.completed}</span>
+            <span className="stat-label">Completed</span>
+          </div>
+          <div className="stat-card">
             <span className="stat-number">{statsLoading ? "-" : stats.collections}</span>
             <span className="stat-label">Collections</span>
           </div>
@@ -277,6 +288,7 @@ const Profile = () => {
               <ul className="delete-list">
                 <li>Your AniHub account</li>
                 <li>Your watchlist</li>
+                <li>Your completed anime</li>
                 <li>All of your collections</li>
                 <li>All anime stored inside your collections</li>
                 <li>Your saved profile information</li>

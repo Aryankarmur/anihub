@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { IoClose } from "react-icons/io5";
-import { updateCollection } from "../firebase/firestore";
+import { updateCollection, isReservedCollectionName, getFirestoreErrorMessage } from "../firebase/firestore";
 import "../assets/css/CollectionModal.css";
 
 const EditCollectionModal = ({ isOpen, onClose, user, collection }) => {
@@ -31,6 +31,13 @@ const EditCollectionModal = ({ isOpen, onClose, user, collection }) => {
       return;
     }
 
+    // Only block if renaming to a reserved name; allow keeping original name for legacy collections
+    const isSameName = trimmedName.toLowerCase() === (collection?.name || "").trim().toLowerCase();
+    if (!isSameName && isReservedCollectionName(trimmedName)) {
+      setError(`"${trimmedName}" is a reserved system collection name.`);
+      return;
+    }
+
     const trimmedDesc = description.trim();
     if (trimmedDesc.length > 300) {
       setError("Description must be 300 characters or less.");
@@ -47,8 +54,8 @@ const EditCollectionModal = ({ isOpen, onClose, user, collection }) => {
       });
       onClose();
     } catch (err) {
-      console.error(err);
-      setError("Unable to update collection. Please try again.");
+      console.error("updateCollection error:", err);
+      setError(getFirestoreErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
