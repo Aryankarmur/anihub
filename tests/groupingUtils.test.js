@@ -108,6 +108,7 @@ test("group metadata contains no duplicated membership list or count", () => {
   assert.deepEqual(Object.keys(metadata).sort(), [
     "collectionId",
     "createdAt",
+    "groupType",
     "name",
     "normalizedName",
     "reservationId",

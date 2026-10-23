@@ -115,6 +115,7 @@ const createGroup = async (db, uid, {
         ? scopeKey.slice("collection:".length)
         : null,
       thumbnailAnimeId: memberIds[0],
+      groupType: "manual",
       status: "active",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -618,6 +619,7 @@ test("rules document the unavoidable minimum-member enforcement limitation", asy
       scopeKey: "watchlist",
       collectionId: null,
       thumbnailAnimeId: "1",
+      groupType: "manual",
       status: "active",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -653,7 +655,7 @@ test("movement markers reject malformed, custom-scope, cross-user-shaped, and un
   }));
 });
 
-test("movement markers require the matching atomic transfer and safely carry across a reverse move", async () => {
+test("movement markers require an atomic transfer and cleanup before a reverse move", async () => {
   await seedAnime("alice", "watchlist", ["1", "2"]);
   const db = testEnv.authenticatedContext("alice").firestore();
   await createGroup(db, "alice", {
@@ -678,7 +680,7 @@ test("movement markers require the matching atomic transfer and safely carry acr
     [task]
   );
 
-  await assertSucceeds(runTransaction(db, async (transaction) => {
+  await assertFails(runTransaction(db, async (transaction) => {
     const source = animeRef(db, "alice", "completed", "1");
     const destination = animeRef(db, "alice", "watchlist", "1");
     const sourceSnapshot = await transaction.get(source);
@@ -689,10 +691,47 @@ test("movement markers require the matching atomic transfer and safely carry acr
     }, { merge: true });
     transaction.delete(source);
   }));
-  assert.deepEqual(
-    (await getDoc(animeRef(db, "alice", "watchlist", "1"))).data()._groupingReconciliations,
-    [task]
+  assert.equal((await getDoc(animeRef(db, "alice", "completed", "1"))).exists(), true);
+
+  await assertSucceeds(updateDoc(animeRef(db, "alice", "completed", "1"), {
+    _groupingReconciliations: deleteField()
+  }));
+  await assertSucceeds(runTransaction(db, async (transaction) => {
+    const source = animeRef(db, "alice", "completed", "1");
+    const destination = animeRef(db, "alice", "watchlist", "1");
+    const sourceSnapshot = await transaction.get(source);
+    transaction.set(destination, {
+      ...sourceSnapshot.data(),
+      addedAt: serverTimestamp()
+    }, { merge: true });
+    transaction.delete(source);
+  }));
+  assert.equal(
+    "_groupingReconciliations" in (await getDoc(animeRef(db, "alice", "watchlist", "1"))).data(),
+    false
   );
+});
+
+test("legacy reconciliation lists from one through eight tasks can be cleared safely", async () => {
+  const db = testEnv.authenticatedContext("alice").firestore();
+  for (let taskCount = 1; taskCount <= 8; taskCount += 1) {
+    const animeId = String(taskCount);
+    const tasks = Array.from({ length: taskCount }, (_, index) => ({
+      sourceScope: index % 2 ? "completed" : "watchlist",
+      sourceGroupId: `legacy-${taskCount}-${index}`,
+      animeId
+    }));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(animeRef(context.firestore(), "alice", "watchlist", animeId), {
+        animeId,
+        title: `Legacy ${taskCount}`,
+        _groupingReconciliations: tasks
+      });
+    });
+    await assertSucceeds(updateDoc(animeRef(db, "alice", "watchlist", animeId), {
+      _groupingReconciliations: deleteField()
+    }));
+  }
 });
 
 test("a deleting Collection rejects additions and lock clearing but permits cleanup", async () => {

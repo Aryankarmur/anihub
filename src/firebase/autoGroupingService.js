@@ -26,7 +26,11 @@ import {
   subscribeToGroupMetadata,
 } from "./firestore.js";
 import { isAnimeGroupingEnabled } from "./groupingFeatureGate.js";
-import { validateUid, parseGroupScopeKey } from "./groupingUtils.js";
+import {
+  GROUP_TYPE_AUTOMATIC,
+  validateUid,
+  parseGroupScopeKey,
+} from "./groupingUtils.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -48,10 +52,10 @@ export const ANILIST_RELATIONS_FIELD = "anilistRelations";
 export const AUTO_GROUP_EXCLUDED_FIELD = "autoGroupExcluded";
 
 /**
- * Field name on group metadata documents that marks a group as manually created.
- * Auto-grouping will never dissolve or overwrite such a group.
+ * Field name on group metadata documents that distinguishes groups created by
+ * automatic reconciliation from user-created or legacy groups.
  */
-export const MANUAL_GROUP_FIELD = "manualGroup";
+export const GROUP_TYPE_FIELD = "groupType";
 
 // ---------------------------------------------------------------------------
 // Relation graph helpers
@@ -189,7 +193,7 @@ export function deriveAutoGroupName(members) {
  */
 export function filterAutoGroups(existingGroups) {
   return (Array.isArray(existingGroups) ? existingGroups : []).filter(
-    (g) => g?.status === "active" && !g[MANUAL_GROUP_FIELD],
+    (g) => g?.status === "active" && g[GROUP_TYPE_FIELD] === GROUP_TYPE_AUTOMATIC,
   );
 }
 
@@ -349,9 +353,13 @@ export async function reconcileAutoGrouping({
   const activeGroups = (Array.isArray(existingGroups) ? existingGroups : []).filter(
     (g) => g?.status === "active",
   );
-  const currentMemberships = buildCurrentGroupMemberships(activeGroups, animeDocuments);
+  // Missing provenance is intentionally conservative: groups created before
+  // groupType existed are treated as manual and are never reorganized.
+  const automaticGroups = filterAutoGroups(activeGroups);
+  const currentMemberships = buildCurrentGroupMemberships(automaticGroups, animeDocuments);
+  const allMemberships = buildCurrentGroupMemberships(activeGroups, animeDocuments);
   const matchedPairs = matchComponentsToGroups(desiredComponents, currentMemberships);
-  const orphanedIds = findOrphanedGroupIds(activeGroups, currentMemberships);
+  const orphanedIds = findOrphanedGroupIds(automaticGroups, currentMemberships);
 
   for (const { desired, existingGroupId } of matchedPairs) {
     const desiredIds = [...desired];
@@ -361,7 +369,7 @@ export async function reconcileAutoGrouping({
       // Ensure anime that already belong to an active group with >= 2 members are not stolen.
       const activeGroupIds = new Set(
         activeGroups
-          .filter((g) => (currentMemberships.get(g.groupId)?.size ?? 0) >= 2)
+          .filter((g) => (allMemberships.get(g.groupId)?.size ?? 0) >= 2)
           .map((g) => g.groupId),
       );
 
@@ -395,6 +403,7 @@ export async function reconcileAutoGrouping({
             scopeKey,
             animeIds: availableDesiredIds,
             thumbnailAnimeId: null,
+            groupType: GROUP_TYPE_AUTOMATIC,
           });
         } catch (nameErr) {
           if (nameErr?.code === "grouping/duplicate-name") {
@@ -404,6 +413,7 @@ export async function reconcileAutoGrouping({
               scopeKey,
               animeIds: availableDesiredIds,
               thumbnailAnimeId: null,
+              groupType: GROUP_TYPE_AUTOMATIC,
             });
           } else {
             throw nameErr;
@@ -424,7 +434,18 @@ export async function reconcileAutoGrouping({
     } else {
       // Update existing auto-group membership.
       const currentIds = currentMemberships.get(existingGroupId) ?? new Set();
-      const toAdd = desiredIds.filter((id) => !currentIds.has(id));
+      const protectedGroupIds = new Set(
+        activeGroups
+          .filter((group) => group.groupId !== existingGroupId)
+          .map((group) => group.groupId),
+      );
+      const toAdd = desiredIds.filter((id) => {
+        if (currentIds.has(id)) return false;
+        const document = animeDocuments.find(
+          (anime) => String(anime.animeId ?? anime.id ?? "") === id,
+        );
+        return !document?.groupId || !protectedGroupIds.has(document.groupId);
+      });
       const toRemove = [...currentIds].filter((id) => !desired.has(id));
 
       if (toAdd.length === 0 && toRemove.length === 0) {

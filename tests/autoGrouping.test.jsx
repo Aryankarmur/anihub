@@ -130,6 +130,7 @@ describe("Automatic Anime Grouping — Complete 18-Requirement Suite", () => {
         groupId: "group-ds",
         name: "Demon Slayer",
         scopeKey: "watchlist",
+        groupType: "automatic",
         status: "active",
       },
     ];
@@ -228,11 +229,21 @@ describe("Automatic Anime Grouping — Complete 18-Requirement Suite", () => {
         animeId: "501",
         title: "Steins;Gate",
         groupId: "manual-favs",
+        [ANILIST_RELATIONS_FIELD]: [{ relatedId: "502", relationType: "SEQUEL" }],
       },
       {
         animeId: "502",
         title: "Attack on Titan",
         groupId: "manual-favs",
+        [ANILIST_RELATIONS_FIELD]: [
+          { relatedId: "501", relationType: "PREQUEL" },
+          { relatedId: "503", relationType: "SEQUEL" },
+        ],
+      },
+      {
+        animeId: "503",
+        title: "A related standalone anime",
+        [ANILIST_RELATIONS_FIELD]: [{ relatedId: "502", relationType: "PREQUEL" }],
       },
     ];
 
@@ -241,22 +252,132 @@ describe("Automatic Anime Grouping — Complete 18-Requirement Suite", () => {
         groupId: "manual-favs",
         name: "My Personal Favorites",
         scopeKey: "watchlist",
+        groupType: "manual",
         status: "active",
       },
     ];
 
+    const createGroupFn = vi.fn();
+    const addAnimeToGroupFn = vi.fn();
+    const removeAnimeFromGroupFn = vi.fn();
     const deleteGroupFn = vi.fn();
     const result = await reconcileAutoGrouping({
       uid: "user-1",
       scopeKey: "watchlist",
       animeDocuments: manualGroupAnime,
       existingGroups,
-      services: { deleteGroupFn },
+      services: {
+        createGroupFn,
+        addAnimeToGroupFn,
+        removeAnimeFromGroupFn,
+        deleteGroupFn,
+      },
     });
 
     // Group has >= 2 members, so it must NEVER be dissolved
     expect(deleteGroupFn).not.toHaveBeenCalled();
+    expect(createGroupFn).not.toHaveBeenCalled();
+    expect(addAnimeToGroupFn).not.toHaveBeenCalled();
+    expect(removeAnimeFromGroupFn).not.toHaveBeenCalled();
     expect(result.dissolved).toEqual([]);
+  });
+
+  it("treats pre-marker groups conservatively as manual", async () => {
+    const animeDocuments = [
+      {
+        animeId: "601",
+        title: "Legacy I",
+        groupId: "legacy-group",
+        [ANILIST_RELATIONS_FIELD]: [{ relatedId: "602", relationType: "SEQUEL" }],
+      },
+      {
+        animeId: "602",
+        title: "Legacy II",
+        groupId: "legacy-group",
+        [ANILIST_RELATIONS_FIELD]: [{ relatedId: "601", relationType: "PREQUEL" }],
+      },
+    ];
+    const createGroupFn = vi.fn();
+    const addAnimeToGroupFn = vi.fn();
+    const removeAnimeFromGroupFn = vi.fn();
+    const deleteGroupFn = vi.fn();
+
+    await reconcileAutoGrouping({
+      uid: "user-1",
+      scopeKey: "watchlist",
+      animeDocuments,
+      existingGroups: [{
+        groupId: "legacy-group",
+        name: "Legacy custom name",
+        scopeKey: "watchlist",
+        status: "active",
+      }],
+      services: {
+        createGroupFn,
+        addAnimeToGroupFn,
+        removeAnimeFromGroupFn,
+        deleteGroupFn,
+      },
+    });
+
+    expect(createGroupFn).not.toHaveBeenCalled();
+    expect(addAnimeToGroupFn).not.toHaveBeenCalled();
+    expect(removeAnimeFromGroupFn).not.toHaveBeenCalled();
+    expect(deleteGroupFn).not.toHaveBeenCalled();
+  });
+
+  it("expands renamed automatic groups without changing their custom metadata", async () => {
+    const existingGroup = {
+      groupId: "automatic-renamed",
+      name: "My Custom Saga Name",
+      thumbnailAnimeId: "701",
+      scopeKey: "watchlist",
+      groupType: "automatic",
+      status: "active",
+    };
+    const animeDocuments = [
+      {
+        animeId: "701",
+        groupId: existingGroup.groupId,
+        title: "Saga I",
+        [ANILIST_RELATIONS_FIELD]: [{ relatedId: "702", relationType: "SEQUEL" }],
+      },
+      {
+        animeId: "702",
+        groupId: existingGroup.groupId,
+        title: "Saga II",
+        [ANILIST_RELATIONS_FIELD]: [
+          { relatedId: "701", relationType: "PREQUEL" },
+          { relatedId: "703", relationType: "SEQUEL" },
+        ],
+      },
+      {
+        animeId: "703",
+        title: "Saga III",
+        [ANILIST_RELATIONS_FIELD]: [{ relatedId: "702", relationType: "PREQUEL" }],
+      },
+    ];
+    const addAnimeToGroupFn = vi.fn().mockResolvedValue({ data: { assignedCount: 1 } });
+
+    const result = await reconcileAutoGrouping({
+      uid: "user-1",
+      scopeKey: "watchlist",
+      animeDocuments,
+      existingGroups: [existingGroup],
+      services: { addAnimeToGroupFn },
+    });
+
+    expect(addAnimeToGroupFn).toHaveBeenCalledWith(
+      "user-1",
+      "automatic-renamed",
+      ["703"],
+    );
+    expect(existingGroup).toMatchObject({
+      name: "My Custom Saga Name",
+      thumbnailAnimeId: "701",
+      groupType: "automatic",
+    });
+    expect(result.updated).toHaveLength(1);
   });
 
   // 7. Excluded anime are not regrouped
@@ -312,6 +433,7 @@ describe("Automatic Anime Grouping — Complete 18-Requirement Suite", () => {
         groupId: "existing-g1",
         name: "Demon Slayer",
         scopeKey: "watchlist",
+        groupType: "automatic",
         status: "active",
       },
     ];
@@ -417,7 +539,7 @@ describe("Automatic Anime Grouping — Complete 18-Requirement Suite", () => {
         [ANILIST_RELATIONS_FIELD]: [{ relatedId: "101", relationType: "PREQUEL" }],
       },
     ];
-    const existing = [{ groupId: "g1", status: "active" }];
+    const existing = [{ groupId: "g1", groupType: "automatic", status: "active" }];
 
     // Stable fingerprint test
     const fp1 = buildStateFingerprint(docs, existing);
@@ -459,6 +581,7 @@ describe("Automatic Anime Grouping — Complete 18-Requirement Suite", () => {
         groupId: "g1",
         name: "Demon Slayer",
         scopeKey: "watchlist",
+        groupType: "automatic",
         status: "active",
       },
     ];
@@ -591,6 +714,7 @@ describe("Automatic Anime Grouping — Complete 18-Requirement Suite", () => {
       scopeKey: "watchlist",
       animeIds: ["101", "102"],
       thumbnailAnimeId: null,
+      groupType: "automatic",
     });
     // Original anime documents are untouched; only groupId is assigned by service
     expect(anime[0].title).toBe("Fullmetal Alchemist");

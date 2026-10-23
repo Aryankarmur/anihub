@@ -48,35 +48,11 @@ service cloud.firestore {
         );
     }
 
-    // A reconciliation marker is executable cleanup work, not ordinary anime
-    // metadata.  A marker may only be introduced by the same atomic
-    // Watchlist <-> Completed transfer that removes the source document.  On
-    // a later reverse transfer, previously persisted tasks may be carried
-    // forward from that source document.  This prevents a direct client write
-    // from inventing cleanup work for an arbitrary group.
-    function taskMatches(task, candidate) {
-      return task.sourceScope == candidate.sourceScope
-        && task.sourceGroupId == candidate.sourceGroupId
-        && task.animeId == candidate.animeId;
-    }
-
-    function taskExistsIn(data, task, animeId) {
-      return data.keys().hasAny(['_groupingReconciliations'])
-        && data._groupingReconciliations is list
-        && data._groupingReconciliations.size() > 0
-        && validMovementTask(task, animeId)
-        && (
-          taskMatches(task, data._groupingReconciliations[0])
-          || (data._groupingReconciliations.size() > 1 && taskMatches(task, data._groupingReconciliations[1]))
-          || (data._groupingReconciliations.size() > 2 && taskMatches(task, data._groupingReconciliations[2]))
-          || (data._groupingReconciliations.size() > 3 && taskMatches(task, data._groupingReconciliations[3]))
-          || (data._groupingReconciliations.size() > 4 && taskMatches(task, data._groupingReconciliations[4]))
-          || (data._groupingReconciliations.size() > 5 && taskMatches(task, data._groupingReconciliations[5]))
-          || (data._groupingReconciliations.size() > 6 && taskMatches(task, data._groupingReconciliations[6]))
-          || (data._groupingReconciliations.size() > 7 && taskMatches(task, data._groupingReconciliations[7]))
-        );
-    }
-
+    // A marker is executable cleanup work, not ordinary anime metadata. New
+    // movements can introduce at most the source and existing-destination
+    // group tasks. Legacy lists of up to eight tasks may be preserved exactly
+    // or cleared after client-side reconciliation; they are never re-matched
+    // pairwise in rules, which keeps evaluation below the expression limit.
     function counterpartWasMoved(uid, destinationScope, animeId) {
       return (
         destinationScope == 'watchlist'
@@ -94,96 +70,61 @@ service cloud.firestore {
         && (
           (
             destinationScope == 'watchlist'
-            && (
-              taskExistsIn(
-                get(/databases/$(database)/documents/users/$(uid)/completed/$(animeId)).data,
-                task,
-                animeId
-              )
-              || (
-                task.sourceScope == 'completed'
-                && get(/databases/$(database)/documents/users/$(uid)/completed/$(animeId)).data.groupId == task.sourceGroupId
-              )
-            )
+            && task.sourceScope == 'completed'
+            && get(/databases/$(database)/documents/users/$(uid)/completed/$(animeId)).data.groupId == task.sourceGroupId
           ) || (
             destinationScope == 'completed'
-            && (
-              taskExistsIn(
-                get(/databases/$(database)/documents/users/$(uid)/watchlist/$(animeId)).data,
-                task,
-                animeId
-              )
-              || (
-                task.sourceScope == 'watchlist'
-                && get(/databases/$(database)/documents/users/$(uid)/watchlist/$(animeId)).data.groupId == task.sourceGroupId
-              )
-            )
+            && task.sourceScope == 'watchlist'
+            && get(/databases/$(database)/documents/users/$(uid)/watchlist/$(animeId)).data.groupId == task.sourceGroupId
           )
         );
     }
 
-    function validReconciliationTaskTransition(uid, destinationScope, animeId, task) {
-      return taskExistsIn(resource.data, task, animeId)
-        || taskProvenancedByCounterpart(uid, destinationScope, animeId, task);
+    function taskProvenancedByDestination(destinationScope, animeId, task) {
+      return validMovementTask(task, animeId)
+        && task.sourceScope == destinationScope
+        && resource.data.keys().hasAny(['groupId'])
+        && resource.data.groupId == task.sourceGroupId;
+    }
+
+    function validFreshUpdateTasks(uid, destinationScope, animeId) {
+      return request.resource.data._groupingReconciliations.size() <= 2
+        && (
+          taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[0]
+          )
+          || taskProvenancedByDestination(
+            destinationScope, animeId, request.resource.data._groupingReconciliations[0]
+          )
+        )
+        && (
+          request.resource.data._groupingReconciliations.size() < 2
+          || taskProvenancedByCounterpart(
+            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[1]
+          )
+          || taskProvenancedByDestination(
+            destinationScope, animeId, request.resource.data._groupingReconciliations[1]
+          )
+        );
     }
 
     function validReconciliationTaskTransitions(uid, destinationScope, animeId) {
       return !request.resource.data.keys().hasAny(['_groupingReconciliations'])
         || (
-          validReconciliationTaskTransition(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[0]
-          )
-          && (request.resource.data._groupingReconciliations.size() < 2 || validReconciliationTaskTransition(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[1]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 3 || validReconciliationTaskTransition(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[2]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 4 || validReconciliationTaskTransition(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[3]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 5 || validReconciliationTaskTransition(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[4]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 6 || validReconciliationTaskTransition(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[5]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 7 || validReconciliationTaskTransition(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[6]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 8 || validReconciliationTaskTransition(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[7]
-          ))
-        );
+          resource.data.keys().hasAny(['_groupingReconciliations'])
+          && request.resource.data._groupingReconciliations == resource.data._groupingReconciliations
+        )
+        || validFreshUpdateTasks(uid, destinationScope, animeId);
     }
 
     function validNewReconciliationTasks(uid, destinationScope, animeId) {
       return !request.resource.data.keys().hasAny(['_groupingReconciliations'])
         || (
+          request.resource.data._groupingReconciliations.size() == 1
+          &&
           taskProvenancedByCounterpart(
             uid, destinationScope, animeId, request.resource.data._groupingReconciliations[0]
           )
-          && (request.resource.data._groupingReconciliations.size() < 2 || taskProvenancedByCounterpart(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[1]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 3 || taskProvenancedByCounterpart(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[2]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 4 || taskProvenancedByCounterpart(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[3]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 5 || taskProvenancedByCounterpart(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[4]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 6 || taskProvenancedByCounterpart(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[5]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 7 || taskProvenancedByCounterpart(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[6]
-          ))
-          && (request.resource.data._groupingReconciliations.size() < 8 || taskProvenancedByCounterpart(
-            uid, destinationScope, animeId, request.resource.data._groupingReconciliations[7]
-          ))
         );
     }
 
@@ -218,7 +159,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'name', 'normalizedName', 'reservationId', 'scopeKey',
           'collectionId', 'thumbnailAnimeId', 'status', 'createdAt', 'updatedAt',
-          'membershipOperation'
+          'membershipOperation', 'groupType'
         ])
         && data.name is string
         && data.name.size() > 0
@@ -239,6 +180,10 @@ service cloud.firestore {
           )
         )
         && (data.thumbnailAnimeId == null || data.thumbnailAnimeId is string)
+        && (
+          !data.keys().hasAny(['groupType'])
+          || data.groupType in ['manual', 'automatic']
+        )
         && data.status in ['active', 'updating', 'deleting']
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
@@ -363,6 +308,7 @@ service cloud.firestore {
 
         allow create: if isOwner(uid)
           && validGroupMetadata(request.resource.data)
+          && request.resource.data.keys().hasAny(['groupType'])
           && request.resource.data.status == 'active'
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
@@ -378,6 +324,12 @@ service cloud.firestore {
           && validGroupMetadata(request.resource.data)
           && request.resource.data.scopeKey == resource.data.scopeKey
           && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.keys().hasAny(['groupType'])
+            == resource.data.keys().hasAny(['groupType'])
+          && (
+            !resource.data.keys().hasAny(['groupType'])
+            || request.resource.data.groupType == resource.data.groupType
+          )
           && validStatusTransition(resource.data.status, request.resource.data.status)
           && (
             request.resource.data.collectionId == null

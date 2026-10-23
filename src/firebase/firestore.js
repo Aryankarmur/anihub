@@ -22,6 +22,8 @@ import {
   buildGroupMetadata,
   chunkGroupOperation,
   GROUP_OPERATION_CHUNK_SIZE,
+  GROUP_TYPE_AUTOMATIC,
+  GROUP_TYPE_MANUAL,
   getGroupNameReservationId,
   getMembershipOperationKey,
   isVisibleGroup,
@@ -42,7 +44,6 @@ import { isAnimeGroupingEnabled } from "./groupingFeatureGate";
 import {
   MOVEMENT_RECONCILIATIONS_FIELD,
   collectMovementReconciliations,
-  movementTaskKey,
   normalizeMovementReconciliations,
   withoutGroupingInternals,
 } from "./movementUtils";
@@ -66,25 +67,27 @@ const createGroupingError = (code, message, details) => {
   return error;
 };
 
-const getGroupsRef = (uid) => collection(db, "users", validateUid(uid), "groups");
-const getGroupRef = (uid, groupId) => (
-  doc(db, "users", validateUid(uid), "groups", validateDocumentId(groupId, "Group ID"))
+const getGroupsRef = (uid, firestore = db) => (
+  collection(firestore, "users", validateUid(uid), "groups")
 );
-const getGroupNameKeyRef = (uid, reservationId) => (
-  doc(db, "users", validateUid(uid), "groupNameKeys", reservationId)
+const getGroupRef = (uid, groupId, firestore = db) => (
+  doc(firestore, "users", validateUid(uid), "groups", validateDocumentId(groupId, "Group ID"))
+);
+const getGroupNameKeyRef = (uid, reservationId, firestore = db) => (
+  doc(firestore, "users", validateUid(uid), "groupNameKeys", reservationId)
 );
 
-export const resolveAnimeCollectionRef = (uid, scopeKey) => {
+export const resolveAnimeCollectionRef = (uid, scopeKey, firestore = db) => {
   const validUid = validateUid(uid);
   const scope = parseGroupScopeKey(scopeKey);
   if (scope.type === "watchlist" || scope.type === "completed") {
-    return collection(db, "users", validUid, scope.type);
+    return collection(firestore, "users", validUid, scope.type);
   }
-  return collection(db, "users", validUid, "collections", scope.collectionId, "items");
+  return collection(firestore, "users", validUid, "collections", scope.collectionId, "items");
 };
 
-export const resolveAnimeDocumentRef = (uid, scopeKey, animeId) => (
-  doc(resolveAnimeCollectionRef(uid, scopeKey), validateAnimeId(animeId))
+export const resolveAnimeDocumentRef = (uid, scopeKey, animeId, firestore = db) => (
+  doc(resolveAnimeCollectionRef(uid, scopeKey, firestore), validateAnimeId(animeId))
 );
 
 const mapGroupSnapshot = (snapshot) => ({ groupId: snapshot.id, ...snapshot.data() });
@@ -227,35 +230,30 @@ export async function retryMovementGroupReconciliation(uid, task) {
 const settleMovementReconciliations = async (uid, destinationRef, requestedTasks) => {
   const tasks = normalizeMovementReconciliations(requestedTasks);
   if (!tasks.length) return { status: "not-needed", pending: [] };
-  const completedKeys = new Set();
   const errors = [];
   for (const task of tasks) {
     try {
       await retryMovementGroupReconciliation(uid, task);
-      completedKeys.add(movementTaskKey(task));
     } catch (error) {
       errors.push({ task, error });
     }
   }
 
-  try {
-    await runTransaction(db, async (transaction) => {
-      const destinationSnapshot = await transaction.get(destinationRef);
-      if (!destinationSnapshot.exists()) return;
-      const currentTasks = normalizeMovementReconciliations(
-        destinationSnapshot.data()[MOVEMENT_RECONCILIATIONS_FIELD]
-      );
-      const remainingTasks = currentTasks.filter(
-        (task) => !completedKeys.has(movementTaskKey(task))
-      );
-      transaction.update(destinationRef, {
-        [MOVEMENT_RECONCILIATIONS_FIELD]: remainingTasks.length
-          ? remainingTasks
-          : deleteField(),
+  // Clear markers only after every task succeeds. Retaining the complete list
+  // on partial failure avoids an expensive rules-side subset comparison and
+  // makes every retry idempotent, including legacy lists containing 1–8 tasks.
+  if (errors.length === 0) {
+    try {
+      await runTransaction(db, async (transaction) => {
+        const destinationSnapshot = await transaction.get(destinationRef);
+        if (!destinationSnapshot.exists()) return;
+        transaction.update(destinationRef, {
+          [MOVEMENT_RECONCILIATIONS_FIELD]: deleteField(),
+        });
       });
-    });
-  } catch (error) {
-    errors.push({ task: null, error });
+    } catch (error) {
+      errors.push({ task: null, error });
+    }
   }
 
   return {
@@ -266,6 +264,23 @@ const settleMovementReconciliations = async (uid, destinationRef, requestedTasks
       message: error?.message || "Movement group cleanup failed.",
     })),
   };
+};
+
+const drainStoredMovementReconciliations = async (uid, documentRef) => {
+  const snapshot = await getDoc(documentRef);
+  if (!snapshot.exists()) return;
+  const tasks = normalizeMovementReconciliations(
+    snapshot.data()[MOVEMENT_RECONCILIATIONS_FIELD]
+  );
+  if (!tasks.length) return;
+  const reconciliation = await settleMovementReconciliations(uid, documentRef, tasks);
+  if (reconciliation.status !== "complete") {
+    throw createGroupingError(
+      "grouping/reconciliation-pending",
+      "Pending group cleanup must finish before this anime can move again.",
+      { reconciliation, retryable: true }
+    );
+  }
 };
 
 const retryPendingMovementReconciliations = (uid, scopeKey, animeDocuments) => {
@@ -295,6 +310,12 @@ const moveAnimeWithGrouping = async ({
   let reconciliationTasks = [];
   let destinationWritten = false;
 
+  // Older clients could persist up to eight cleanup tasks. Drain those tasks
+  // before creating a new atomic movement so rules only need to validate the
+  // source and destination group tasks introduced by this one move (max two).
+  await drainStoredMovementReconciliations(validUid, sourceRef);
+  await drainStoredMovementReconciliations(validUid, destinationRef);
+
   await runTransaction(db, async (transaction) => {
     const [sourceSnapshot, destinationSnapshot] = await Promise.all([
       transaction.get(sourceRef),
@@ -302,6 +323,20 @@ const moveAnimeWithGrouping = async ({
     ]);
     const sourceData = sourceSnapshot.exists() ? sourceSnapshot.data() : null;
     const destinationData = destinationSnapshot.exists() ? destinationSnapshot.data() : null;
+    if (
+      normalizeMovementReconciliations(
+        sourceData?.[MOVEMENT_RECONCILIATIONS_FIELD]
+      ).length > 0
+      || normalizeMovementReconciliations(
+        destinationData?.[MOVEMENT_RECONCILIATIONS_FIELD]
+      ).length > 0
+    ) {
+      throw createGroupingError(
+        "grouping/reconciliation-pending",
+        "Movement cleanup changed concurrently; retry after cleanup completes.",
+        { retryable: true }
+      );
+    }
     reconciliationTasks = collectMovementReconciliations({
       animeId: normalizedAnimeId,
       sourceScope,
@@ -416,94 +451,142 @@ export const getUserProfile = async (uid) => {
   }
 };
 
-export const deleteUserData = async (uid) => {
-  if (!uid) {
-    throw new Error("uid is required to delete user data.");
+const ACCOUNT_DELETION_BATCH_SIZE = 100;
+const ACCOUNT_DELETION_RESERVATION_BATCH_SIZE = 10;
+
+const isPermissionDenied = (error) => (
+  error?.code === "permission-denied"
+  || error?.code === "firestore/permission-denied"
+  || String(error?.message || "").includes("PERMISSION_DENIED")
+);
+
+const deleteCollectionDocumentsInBatches = async (
+  firestore,
+  collectionRef,
+  batchSize = ACCOUNT_DELETION_BATCH_SIZE,
+) => {
+  let deletedCount = 0;
+  while (true) {
+    const snapshot = await getDocs(query(collectionRef, limit(batchSize)));
+    if (snapshot.empty) return deletedCount;
+    const batch = writeBatch(firestore);
+    snapshot.docs.forEach((documentSnapshot) => batch.delete(documentSnapshot.ref));
+    await batch.commit();
+    deletedCount += snapshot.size;
   }
-  
+};
+
+export const deleteUserDataFromFirestore = async (
+  firestore,
+  uid,
+  { deleteGroupById } = {},
+) => {
+  const validUid = validateUid(uid);
+  const userRef = doc(firestore, "users", validUid);
+  const groupsRef = getGroupsRef(validUid, firestore);
+  const reservationsRef = collection(firestore, "users", validUid, "groupNameKeys");
+  const progress = {
+    mode: null,
+    deletedGroupIds: [],
+    deletedReservations: 0,
+    deletedWatchlist: 0,
+    deletedCompleted: 0,
+    deletedCollectionItems: 0,
+    deletedCollections: 0,
+    profileDeleted: false,
+  };
+
   try {
-    const batches = [];
-    let currentBatch = writeBatch(db);
-    let currentBatchSize = 0;
+    const profileSnapshot = await getDoc(userRef);
+    const groupingWasUsed = profileSnapshot.exists()
+      && profileSnapshot.data()?.groupingState?.hasData === true;
+    let groupingPermissionsAvailable = true;
 
-    const commitBatchIfNeeded = () => {
-      // Firestore allows up to 500 writes per batch, 450 is a safe limit
-      if (currentBatchSize >= 450) {
-        batches.push(currentBatch.commit());
-        currentBatch = writeBatch(db);
-        currentBatchSize = 0;
+    try {
+      await getDocs(query(groupsRef, limit(1)));
+    } catch (error) {
+      if (!isPermissionDenied(error)) throw error;
+      groupingPermissionsAvailable = false;
+    }
+
+    if (!groupingPermissionsAvailable && groupingWasUsed) {
+      throw createGroupingError(
+        "grouping/account-cleanup-unavailable",
+        "Grouping data may exist, but the active Firestore rules do not permit its cleanup.",
+        { retryable: true }
+      );
+    }
+
+    progress.mode = groupingPermissionsAvailable ? "group-aware" : "legacy";
+
+    if (groupingPermissionsAvailable) {
+      const removeGroup = deleteGroupById
+        || ((groupId) => deleteGroupFromFirestore(firestore, validUid, groupId));
+      while (true) {
+        const groupsSnapshot = await getDocs(query(groupsRef, limit(25)));
+        if (groupsSnapshot.empty) break;
+        for (const groupSnapshot of groupsSnapshot.docs) {
+          await removeGroup(groupSnapshot.id);
+          progress.deletedGroupIds.push(groupSnapshot.id);
+        }
       }
-    };
 
-    // 1. Delete Watchlist
-    const watchlistRef = collection(db, "users", uid, "watchlist");
-    const watchlistSnap = await getDocs(watchlistRef);
-    watchlistSnap.forEach((docSnap) => {
-      currentBatch.delete(docSnap.ref);
-      currentBatchSize++;
-      commitBatchIfNeeded();
-    });
-
-    // 1b. Delete Completed
-    const completedRef = collection(db, "users", uid, "completed");
-    const completedSnap = await getDocs(completedRef);
-    completedSnap.forEach((docSnap) => {
-      currentBatch.delete(docSnap.ref);
-      currentBatchSize++;
-      commitBatchIfNeeded();
-    });
-
-    // 1c. Delete grouping metadata and deterministic name reservations
-    const groupsSnap = await getDocs(collection(db, "users", uid, "groups"));
-    groupsSnap.forEach((docSnap) => {
-      currentBatch.delete(docSnap.ref);
-      currentBatchSize++;
-      commitBatchIfNeeded();
-    });
-
-    const groupNameKeysSnap = await getDocs(collection(db, "users", uid, "groupNameKeys"));
-    groupNameKeysSnap.forEach((docSnap) => {
-      currentBatch.delete(docSnap.ref);
-      currentBatchSize++;
-      commitBatchIfNeeded();
-    });
-
-    // 2. Delete Collections and their Items
-    const collectionsRef = collection(db, "users", uid, "collections");
-    const collectionsSnap = await getDocs(collectionsRef);
-    
-    for (const colSnap of collectionsSnap.docs) {
-      // Get all items in this collection
-      const itemsRef = collection(db, "users", uid, "collections", colSnap.id, "items");
-      const itemsSnap = await getDocs(itemsRef);
-      
-      itemsSnap.forEach((itemSnap) => {
-        currentBatch.delete(itemSnap.ref);
-        currentBatchSize++;
-        commitBatchIfNeeded();
-      });
-
-      // Delete the collection document
-      currentBatch.delete(colSnap.ref);
-      currentBatchSize++;
-      commitBatchIfNeeded();
+      // Any reservation left after all groups are gone is orphaned. Keep this
+      // batch small because each rules check reads its referenced group.
+      while (true) {
+        const reservationsSnapshot = await getDocs(query(
+          reservationsRef,
+          limit(ACCOUNT_DELETION_RESERVATION_BATCH_SIZE),
+        ));
+        if (reservationsSnapshot.empty) break;
+        const batch = writeBatch(firestore);
+        reservationsSnapshot.docs.forEach((snapshot) => batch.delete(snapshot.ref));
+        await batch.commit();
+        progress.deletedReservations += reservationsSnapshot.size;
+      }
     }
 
-    // 3. Delete user profile document
-    const userProfileRef = doc(db, "users", uid);
-    currentBatch.delete(userProfileRef);
-    currentBatchSize++;
-    
-    // Commit the remaining batch
-    if (currentBatchSize > 0) {
-      batches.push(currentBatch.commit());
+    progress.deletedWatchlist = await deleteCollectionDocumentsInBatches(
+      firestore,
+      collection(firestore, "users", validUid, "watchlist"),
+    );
+    progress.deletedCompleted = await deleteCollectionDocumentsInBatches(
+      firestore,
+      collection(firestore, "users", validUid, "completed"),
+    );
+
+    const collectionsRef = collection(firestore, "users", validUid, "collections");
+    while (true) {
+      const collectionsSnapshot = await getDocs(query(collectionsRef, limit(25)));
+      if (collectionsSnapshot.empty) break;
+      for (const collectionSnapshot of collectionsSnapshot.docs) {
+        progress.deletedCollectionItems += await deleteCollectionDocumentsInBatches(
+          firestore,
+          collection(collectionSnapshot.ref, "items"),
+        );
+        await deleteDoc(collectionSnapshot.ref);
+        progress.deletedCollections += 1;
+      }
     }
-    
-    await Promise.all(batches);
-    return { error: null };
+
+    await deleteDoc(userRef);
+    progress.profileDeleted = true;
+    return { data: progress, error: null };
+  } catch (error) {
+    throw addOperationProgress(error, {
+      operation: "delete-user-data",
+      ...progress,
+      retryable: true,
+    });
+  }
+};
+
+export const deleteUserData = async (uid) => {
+  try {
+    return await deleteUserDataFromFirestore(db, uid);
   } catch (error) {
     console.error("Error deleting user data:", error);
-    throw error; // Re-throw to be handled by caller
+    throw error;
   }
 };
 
@@ -1087,10 +1170,16 @@ export const getCompletedCount = async (uid) => {
 // ANIME GROUPS
 // ==========================================
 
-const getGroupMembersQuery = (uid, scopeKey, groupId, maximum = null) => {
+const getGroupMembersQuery = (
+  uid,
+  scopeKey,
+  groupId,
+  maximum = null,
+  firestore = db,
+) => {
   const constraints = [where("groupId", "==", validateDocumentId(groupId, "Group ID"))];
   if (maximum !== null) constraints.push(limit(maximum));
-  return query(resolveAnimeCollectionRef(uid, scopeKey), ...constraints);
+  return query(resolveAnimeCollectionRef(uid, scopeKey, firestore), ...constraints);
 };
 
 export const getGroupMemberCount = async (uid, scopeKey, groupId) => {
@@ -1103,11 +1192,20 @@ export const getGroupMemberCount = async (uid, scopeKey, groupId) => {
 
 export const createGroup = async (
   uid,
-  { name, scopeKey, animeIds, thumbnailAnimeId = null } = {}
+  {
+    name,
+    scopeKey,
+    animeIds,
+    thumbnailAnimeId = null,
+    groupType = GROUP_TYPE_MANUAL,
+  } = {}
 ) => {
   const validUid = validateUid(uid);
   const scope = parseGroupScopeKey(scopeKey);
   const normalized = normalizeGroupName(name);
+  if (![GROUP_TYPE_MANUAL, GROUP_TYPE_AUTOMATIC].includes(groupType)) {
+    throw createGroupingError("grouping/invalid-type", "Group type is invalid.");
+  }
   const requestedIds = normalizeInitialGroupAnimeIds(animeIds);
   const requestedThumbnailId = thumbnailAnimeId === null
     ? requestedIds[0]
@@ -1126,6 +1224,7 @@ export const createGroup = async (
   const groupRef = doc(getGroupsRef(validUid));
   const reservationId = await getGroupNameReservationId(scope.scopeKey, normalized.normalizedName);
   const reservationRef = getGroupNameKeyRef(validUid, reservationId);
+  const profileRef = doc(db, "users", validUid);
   const initialAnimeRefs = initialIds.map((animeId) => (
     resolveAnimeDocumentRef(validUid, scope.scopeKey, animeId)
   ));
@@ -1177,6 +1276,7 @@ export const createGroup = async (
       scopeKey: scope.scopeKey,
       collectionId: scope.collectionId,
       thumbnailAnimeId: initialThumbnailId,
+      groupType,
       status: GROUP_STATUS_ACTIVE,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -1187,6 +1287,12 @@ export const createGroup = async (
       groupId: groupRef.id,
       createdAt: serverTimestamp()
     });
+    transaction.set(profileRef, {
+      groupingState: {
+        hasData: true,
+        updatedAt: serverTimestamp(),
+      },
+    }, { merge: true });
     initialAnimeRefs.forEach((animeRef) => {
       transaction.update(animeRef, { groupId: groupRef.id });
     });
@@ -1219,6 +1325,7 @@ export const createGroup = async (
       name: normalized.name,
       scopeKey: scope.scopeKey,
       thumbnailAnimeId: requestedThumbnailId,
+      groupType,
       status: GROUP_STATUS_ACTIVE
     },
     operation: { requestedCount: requestedIds.length, assignedCount },
@@ -1550,15 +1657,15 @@ export const removeAnimeFromGroup = async (uid, groupId, animeIds) => {
   }
 };
 
-export const deleteGroup = async (uid, groupId) => {
+export const deleteGroupFromFirestore = async (firestore, uid, groupId) => {
   const validUid = validateUid(uid);
   const validGroupId = validateDocumentId(groupId, "Group ID");
-  const groupRef = getGroupRef(validUid, validGroupId);
+  const groupRef = getGroupRef(validUid, validGroupId, firestore);
   let groupData = null;
   let clearedCount = 0;
 
   try {
-    await runTransaction(db, async (transaction) => {
+    await runTransaction(firestore, async (transaction) => {
       const groupSnapshot = await transaction.get(groupRef);
       if (!groupSnapshot.exists()) return;
       groupData = groupSnapshot.data();
@@ -1575,12 +1682,18 @@ export const deleteGroup = async (uid, groupId) => {
 
     while (true) {
       const memberSnapshot = await getDocs(
-        getGroupMembersQuery(validUid, groupData.scopeKey, validGroupId, GROUP_OPERATION_CHUNK_SIZE)
+        getGroupMembersQuery(
+          validUid,
+          groupData.scopeKey,
+          validGroupId,
+          GROUP_OPERATION_CHUNK_SIZE,
+          firestore,
+        )
       );
       if (memberSnapshot.empty) break;
 
       let chunkClearedCount = 0;
-      await runTransaction(db, async (transaction) => {
+      await runTransaction(firestore, async (transaction) => {
         const groupSnapshot = await transaction.get(groupRef);
         if (!groupSnapshot.exists()) return;
         if (groupSnapshot.data().status !== GROUP_STATUS_DELETING) {
@@ -1604,8 +1717,8 @@ export const deleteGroup = async (uid, groupId) => {
       groupData.scopeKey,
       normalizeGroupName(groupData.name).normalizedName
     );
-    const reservationRef = getGroupNameKeyRef(validUid, reservationId);
-    await runTransaction(db, async (transaction) => {
+    const reservationRef = getGroupNameKeyRef(validUid, reservationId, firestore);
+    await runTransaction(firestore, async (transaction) => {
       const [groupSnapshot, reservationSnapshot] = await Promise.all([
         transaction.get(groupRef),
         transaction.get(reservationRef)
@@ -1630,6 +1743,8 @@ export const deleteGroup = async (uid, groupId) => {
     });
   }
 };
+
+export const deleteGroup = (uid, groupId) => deleteGroupFromFirestore(db, uid, groupId);
 
 export const inspectInvalidGroups = async (uid, scopeKey) => {
   const validUid = validateUid(uid);

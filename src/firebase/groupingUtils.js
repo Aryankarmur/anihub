@@ -1,5 +1,7 @@
 export const GROUP_NAME_MAX_LENGTH = 80;
 export const GROUP_MIN_MEMBER_COUNT = 2;
+export const GROUP_TYPE_MANUAL = "manual";
+export const GROUP_TYPE_AUTOMATIC = "automatic";
 // Keep transactional membership work comfortably below Firestore's 20
 // document-access ceiling for multi-document requests. Group size itself is
 // intentionally unlimited; larger operations remain resumable across chunks.
@@ -128,6 +130,7 @@ export const buildGroupMetadata = ({
   scopeKey,
   collectionId = null,
   thumbnailAnimeId,
+  groupType = GROUP_TYPE_MANUAL,
   status = "active",
   createdAt,
   updatedAt
@@ -138,6 +141,7 @@ export const buildGroupMetadata = ({
   scopeKey,
   collectionId,
   thumbnailAnimeId,
+  groupType,
   status,
   createdAt,
   updatedAt

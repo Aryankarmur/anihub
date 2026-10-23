@@ -313,6 +313,42 @@ describe("F02 movement with grouping enabled", () => {
     ]);
   });
 
+  it.each([1, 2, 3, 4, 5, 6, 7, 8])(
+    "recovers %i older pending reconciliation task(s) before moving",
+    async (taskCount) => {
+      const pending = Array.from({ length: taskCount }, (_, index) => ({
+        sourceScope: index % 2 ? "completed" : "watchlist",
+        sourceGroupId: `already-clean-${index}`,
+        animeId: "1",
+      }));
+      setAnime("watchlist", "1", { _groupingReconciliations: pending });
+
+      await addToCompleted("user-1", { animeId: "1", title: "Moved" });
+
+      expect(harness.state.has(path("watchlist", "1"))).toBe(false);
+      expect(destinationData("completed", "1")._groupingReconciliations).toBeUndefined();
+    },
+  );
+
+  it("retains every older marker when pre-move cleanup is interrupted", async () => {
+    const pending = Array.from({ length: 3 }, (_, index) => ({
+      sourceScope: index % 2 ? "completed" : "watchlist",
+      sourceGroupId: `pending-${index}`,
+      animeId: "1",
+    }));
+    setAnime("watchlist", "1", { _groupingReconciliations: pending });
+    harness.failTransactionCall = 2;
+
+    await expect(addToCompleted("user-1", { animeId: "1", title: "Moved" }))
+      .rejects.toMatchObject({ code: "grouping/reconciliation-pending" });
+    expect(destinationData("watchlist", "1")._groupingReconciliations).toEqual(pending);
+    expect(harness.state.has(path("completed", "1"))).toBe(false);
+
+    harness.failTransactionCall = null;
+    await addToCompleted("user-1", { animeId: "1", title: "Moved" });
+    expect(destinationData("completed", "1")._groupingReconciliations).toBeUndefined();
+  });
+
   it("refuses a movement rather than dropping excess pending cleanup", () => {
     const pending = Array.from({ length: 9 }, (_, index) => ({
       sourceScope: index % 2 ? "completed" : "watchlist",
