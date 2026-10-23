@@ -18,6 +18,9 @@ vi.mock("../src/firebase/groupingFeatureGate.js", async (importOriginal) => {
   return {
     ...actual,
     isAnimeGroupingEnabled: true,
+    isGroupingDataCompatibilityEnabled: () => true,
+    isGroupingPresentationEnabled: () => true,
+    isAutomaticReconciliationEnabled: () => true,
   };
 });
 

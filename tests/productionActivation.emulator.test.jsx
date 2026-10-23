@@ -46,7 +46,7 @@ import {
 } from "../src/firebase/groupingFeatureGate";
 import {
   evaluateGroupingPreviewEnvironment,
-  GROUP_PREVIEW_PROJECT_ID,
+  GROUPING_PREVIEW_PROJECT_ID,
 } from "../src/firebase/groupingPreviewConfig";
 
 describe("AniHub F01 Phase G1.5 — Production Activation & Preflight Test Suite", () => {
@@ -397,17 +397,25 @@ describe("AniHub F01 Phase G1.5 — Production Activation & Preflight Test Suite
   // 11. Preview / Project isolation
   it("11. enforces strict preview isolation, rejecting production project IDs and non-loopback hosts", () => {
     const prodConfig = evaluateGroupingPreviewEnvironment({
-      VITE_GROUPING_PREVIEW: "true",
-      VITE_FIREBASE_PROJECT_ID: "anihub-prod-live-app",
       DEV: true,
       MODE: "grouping-preview",
+      VITE_GROUPING_PREVIEW: "true",
+      VITE_ENABLE_WATCHLIST_GROUPING: "true",
+      VITE_FIREBASE_USE_EMULATOR: "true",
+      VITE_FIREBASE_PROJECT_ID: "anihub-prod-live-app",
+      VITE_FIREBASE_API_KEY: GROUPING_PREVIEW_PROJECT_ID,
+      VITE_FIREBASE_AUTH_DOMAIN: `${GROUPING_PREVIEW_PROJECT_ID}.localhost`,
+      VITE_FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1",
+      VITE_FIREBASE_AUTH_EMULATOR_PORT: "9099",
+      VITE_FIREBASE_FIRESTORE_EMULATOR_HOST: "127.0.0.1",
+      VITE_FIREBASE_FIRESTORE_EMULATOR_PORT: "8080",
     });
     expect(prodConfig.enabled).toBe(false);
-    expect(prodConfig.errors.some((e) => e.includes(GROUP_PREVIEW_PROJECT_ID))).toBe(true);
+    expect(prodConfig.errors.some((e) => e.includes(GROUPING_PREVIEW_PROJECT_ID))).toBe(true);
 
     const nonDevConfig = evaluateGroupingPreviewEnvironment({
       VITE_GROUPING_PREVIEW: "true",
-      VITE_FIREBASE_PROJECT_ID: GROUP_PREVIEW_PROJECT_ID,
+      VITE_FIREBASE_PROJECT_ID: GROUPING_PREVIEW_PROJECT_ID,
       DEV: false,
       MODE: "production",
     });

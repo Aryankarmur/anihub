@@ -29,17 +29,14 @@ import {
 import * as groupingFeatureGate from "./groupingFeatureGate.js";
 
 const isAutoReconcileEnabled = () => {
-  if (!groupingFeatureGate.isAnimeGroupingEnabled) {
-    return false;
-  }
   try {
     if (typeof groupingFeatureGate.isAutomaticReconciliationEnabled === "function") {
       return groupingFeatureGate.isAutomaticReconciliationEnabled();
     }
   } catch {
-    // mock fallback
+    // Fall back to isAnimeGroupingEnabled if mock does not define isAutomaticReconciliationEnabled
   }
-  return true;
+  return Boolean(groupingFeatureGate.isAnimeGroupingEnabled);
 };
 
 
