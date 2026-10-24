@@ -13,7 +13,8 @@ const LibraryGrid = ({
   onDeleteGroup,
   renderAnimeCard,
   emptyState = null,
-  className = ""
+  className = "",
+  showGroupActions = true,
 }) => {
   const visibleGroups = deriveVisibleGroups(groups, animeDocuments);
   const { grouped, standalone } = partitionAnimeByVisibleGroups(animeDocuments, visibleGroups);
@@ -41,6 +42,7 @@ const LibraryGrid = ({
               onOpenGroup={onOpenGroup}
               onEditGroup={onEditGroup}
               onDeleteGroup={onDeleteGroup}
+              showActions={showGroupActions}
             />
           );
         }

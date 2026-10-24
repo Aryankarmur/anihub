@@ -7,12 +7,24 @@ import EditCollectionModal from "../component/EditCollectionModal";
 import WatchlistSection from "../component/WatchlistSection";
 import CustomCollectionSection from "../component/CustomCollectionSection";
 import CompletedSection from "../component/CompletedSection";
+import UpNextSection from "../features/upNext/UpNextSection";
+import { useUpNextSuggestions } from "../features/upNext/useUpNextSuggestions";
+import {
+  SYSTEM_COLLECTION_UP_NEXT,
+  UP_NEXT_SEARCH_SCOPE,
+} from "../features/upNext/upNextService";
 import * as groupingFeatureGate from "../firebase/groupingFeatureGate";
+import {
+  COMPLETED_SEARCH_SCOPE,
+  WATCHLIST_SEARCH_SCOPE,
+  collectionSearchScope,
+  useLibrarySearchQueries,
+} from "../hooks/useLibrarySearchQueries";
 
-const isPresentationEnabled = () => {
+const isPresentationEnabled = (uid) => {
   try {
     if (typeof groupingFeatureGate.isGroupingPresentationEnabled === "function") {
-      return groupingFeatureGate.isGroupingPresentationEnabled();
+      return groupingFeatureGate.isGroupingPresentationEnabled(uid);
     }
   } catch {
     // Fall back to isAnimeGroupingEnabled if mock does not define isGroupingPresentationEnabled
@@ -28,6 +40,8 @@ import {
   removeFromWatchlist,
   removeFromCollection,
   removeFromCompleted,
+  addToWatchlist,
+  addToCompleted,
   deleteCollection,
   getFirestoreErrorMessage,
   inspectLegacyMigration,
@@ -70,6 +84,12 @@ const MyLibrary = () => {
   // Presentation State
   const [showAllWatchlist, setShowAllWatchlist] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const { getSearchQuery, setSearchQuery } = useLibrarySearchQueries();
+  const upNext = useUpNextSuggestions({
+    watchlist,
+    completed: completedList,
+    isLoading: watchlistLoading || completedLoading,
+  });
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -161,7 +181,12 @@ const MyLibrary = () => {
 
   // 5. Subscribe to specific Collection Items when selected (custom collections only)
   useEffect(() => {
-    if (!currentUser || !selectedCollectionId || selectedCollectionId === SYSTEM_COLLECTION_COMPLETED) {
+    if (
+      !currentUser
+      || !selectedCollectionId
+      || selectedCollectionId === SYSTEM_COLLECTION_COMPLETED
+      || selectedCollectionId === SYSTEM_COLLECTION_UP_NEXT
+    ) {
       setCollectionItems([]);
       setCollectionItemsScopeId(null);
       return;
@@ -227,6 +252,33 @@ const MyLibrary = () => {
     } catch (error) {
       console.error("Failed to remove from collection:", error);
       alert(getFirestoreErrorMessage(error));
+    }
+  };
+
+  const toSavedAnime = (anime) => ({
+    animeId: anime.animeId,
+    title: anime.title,
+    image: anime.image,
+    type: anime.type,
+    score: anime.score,
+    ...(Array.isArray(anime.anilistRelations)
+      ? { anilistRelations: anime.anilistRelations }
+      : {}),
+  });
+
+  const handleAddUpNextToWatchlist = async (anime) => {
+    try {
+      await addToWatchlist(currentUser.uid, toSavedAnime(anime));
+    } catch (error) {
+      throw new Error(getFirestoreErrorMessage(error), { cause: error });
+    }
+  };
+
+  const handleMarkUpNextCompleted = async (anime) => {
+    try {
+      await addToCompleted(currentUser.uid, toSavedAnime(anime));
+    } catch (error) {
+      throw new Error(getFirestoreErrorMessage(error), { cause: error });
     }
   };
 
@@ -314,6 +366,7 @@ const MyLibrary = () => {
   const activeCollectionItemsLoading = itemsLoading
     || (Boolean(selectedCollectionId)
       && selectedCollectionId !== SYSTEM_COLLECTION_COMPLETED
+      && selectedCollectionId !== SYSTEM_COLLECTION_UP_NEXT
       && collectionItemsScopeId !== selectedCollectionId);
 
   return (
@@ -332,7 +385,9 @@ const MyLibrary = () => {
         showAll={showAllWatchlist}
         onToggleShowAll={() => setShowAllWatchlist((current) => !current)}
         onRemoveAnime={handleRemoveFromWatchlist}
-        groupingEnabled={isPresentationEnabled()}
+        groupingEnabled={isPresentationEnabled(currentUser.uid)}
+        searchQuery={getSearchQuery(WATCHLIST_SEARCH_SCOPE)}
+        onSearchQueryChange={(query) => setSearchQuery(WATCHLIST_SEARCH_SCOPE, query)}
       />
 
       {/* COLLECTIONS SECTION */}
@@ -431,6 +486,19 @@ const MyLibrary = () => {
               <span className="tab-count">{completedLoading ? "..." : `${completedList.length} Anime`}</span>
             </div>
 
+            {/* Built-in derived Up Next Collection Tab */}
+            <div
+              className={`collection-tab ${selectedCollectionId === SYSTEM_COLLECTION_UP_NEXT ? 'active' : ''}`}
+              onClick={() => setSelectedCollectionId(
+                selectedCollectionId === SYSTEM_COLLECTION_UP_NEXT ? null : SYSTEM_COLLECTION_UP_NEXT
+              )}
+            >
+              <span>Up Next</span>
+              <span className="tab-count">
+                {upNext.isLoading ? "..." : `${upNext.suggestions.length} Suggestion${upNext.suggestions.length === 1 ? "" : "s"}`}
+              </span>
+            </div>
+
             {/* Custom Collection Tabs */}
             {visibleCollections.map(col => {
               const isLegacyCompleted = col.name && col.name.trim().toLowerCase() === "completed";
@@ -466,7 +534,35 @@ const MyLibrary = () => {
               animeDocuments={completedList}
               isLoading={completedLoading}
               onRemoveAnime={handleRemoveFromCompleted}
-              groupingEnabled={isPresentationEnabled()}
+              groupingEnabled={isPresentationEnabled(currentUser.uid)}
+              searchQuery={getSearchQuery(COMPLETED_SEARCH_SCOPE)}
+              onSearchQueryChange={(query) => setSearchQuery(COMPLETED_SEARCH_SCOPE, query)}
+            />
+          </div>
+        ) : selectedCollectionId === SYSTEM_COLLECTION_UP_NEXT ? (
+          <div className="active-collection-view">
+            <div className="active-collection-header">
+              <div className="active-collection-info">
+                <h2>Up Next</h2>
+                <p>Verified direct sequels derived from your Watchlist and Completed anime.</p>
+              </div>
+              <div className="active-collection-badge">
+                <span className="built-in-badge">Automatic Collection</span>
+              </div>
+            </div>
+
+            <UpNextSection
+              suggestions={upNext.suggestions}
+              isLoading={upNext.isLoading}
+              error={upNext.error}
+              isDiscovering={upNext.isDiscovering}
+              discoveryMessage={upNext.discoveryMessage}
+              discoveryError={upNext.discoveryError}
+              onDiscoverSequels={upNext.discoverSequels}
+              searchQuery={getSearchQuery(UP_NEXT_SEARCH_SCOPE)}
+              onSearchQueryChange={(query) => setSearchQuery(UP_NEXT_SEARCH_SCOPE, query)}
+              onAddToWatchlist={handleAddUpNextToWatchlist}
+              onMarkCompleted={handleMarkUpNextCompleted}
             />
           </div>
         ) : selectedCollectionId && selectedCollection ? (
@@ -500,7 +596,12 @@ const MyLibrary = () => {
               animeDocuments={activeCollectionItems}
               isLoading={activeCollectionItemsLoading}
               onRemoveAnime={handleRemoveFromCollection}
-              groupingEnabled={isPresentationEnabled()}
+              groupingEnabled={isPresentationEnabled(currentUser.uid)}
+              searchQuery={getSearchQuery(collectionSearchScope(selectedCollectionId))}
+              onSearchQueryChange={(query) => (
+                setSearchQuery(collectionSearchScope(selectedCollectionId), query)
+              )}
+              searchLabel={selectedCollection.name || "Collection"}
             />
           </div>
         ) : null}

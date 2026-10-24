@@ -4,10 +4,15 @@ import GroupDeleteDialog from "./GroupDeleteDialog";
 import GroupDetail from "./GroupDetail";
 import GroupManagementModal from "./GroupManagementModal";
 import LibraryGrid from "./LibraryGrid";
+import LibrarySearch, { LibrarySearchEmptyState } from "./LibrarySearch";
 import SkeletonCard from "./SkeletonCard";
 import { getAnimeId, toCardAnime } from "./groupingUi";
 import { useAnimeGrouping } from "../hooks/useAnimeGrouping";
 import { useAutoGrouping } from "../hooks/useAutoGrouping";
+import {
+  createLibrarySearchView,
+  getVisibleGroupMembersForSearch,
+} from "../utils/librarySearch";
 
 const CollectionEmptyState = () => (
   <div className="library-empty-state">
@@ -49,6 +54,9 @@ const EnabledCustomCollectionGrouping = ({
   onRemoveAnime,
   isLoading,
   services,
+  searchQuery,
+  onSearchQueryChange,
+  searchLabel,
 }) => {
   const grouping = useAnimeGrouping({
     uid,
@@ -64,6 +72,11 @@ const EnabledCustomCollectionGrouping = ({
     services,
   });
   const subscriptionError = grouping.error?.operation === "subscribe" ? grouping.error : null;
+  const searchView = createLibrarySearchView({
+    groups: grouping.groups,
+    animeDocuments,
+    query: searchQuery,
+  });
   const renderAnimeCard = (anime, inGroupDetail = false) => (
     <CollectionAnimeCard
       anime={anime}
@@ -74,6 +87,13 @@ const EnabledCustomCollectionGrouping = ({
 
   return (
     <>
+      <LibrarySearch
+        query={searchQuery}
+        onQueryChange={onSearchQueryChange}
+        locationLabel={searchLabel}
+        resultCount={searchView.resultCount}
+      />
+
       {!grouping.selectedGroup && (
         <div className="collection-grouping-toolbar auto-grouping-toolbar">
           <button
@@ -129,12 +149,21 @@ const EnabledCustomCollectionGrouping = ({
       {grouping.selectedGroup ? (
         <GroupDetail
           {...grouping.groupDetailProps}
+          visibleMembers={getVisibleGroupMembersForSearch({
+            group: grouping.selectedGroup,
+            members: grouping.selectedMembers,
+            query: searchQuery,
+          })}
+          searchQuery={searchQuery}
           renderAnimeCard={(anime) => renderAnimeCard(anime, true)}
         />
       ) : (
         <LibraryGrid
           {...grouping.libraryGridProps}
+          groups={searchView.groups}
+          animeDocuments={searchView.animeDocuments}
           renderAnimeCard={renderAnimeCard}
+          emptyState={<LibrarySearchEmptyState query={searchQuery} />}
         />
       )}
 
@@ -152,7 +181,11 @@ const CustomCollectionSection = ({
   onRemoveAnime,
   groupingEnabled = false,
   groupingServices,
+  searchQuery = "",
+  onSearchQueryChange,
+  searchLabel = "Collection",
 }) => {
+  const legacySearchView = createLibrarySearchView({ animeDocuments, query: searchQuery });
   let content;
   if (isLoading) {
     content = (
@@ -161,9 +194,36 @@ const CustomCollectionSection = ({
       </div>
     );
   } else if (animeDocuments.length === 0) {
-    content = <CollectionEmptyState />;
+    content = (
+      <>
+        <LibrarySearch
+          query={searchQuery}
+          onQueryChange={onSearchQueryChange}
+          locationLabel={searchLabel}
+          resultCount={0}
+        />
+        <CollectionEmptyState />
+      </>
+    );
   } else if (!groupingEnabled || !uid || !collectionId) {
-    content = <LegacyCollectionItems animeDocuments={animeDocuments} onRemoveAnime={onRemoveAnime} />;
+    content = (
+      <>
+        <LibrarySearch
+          query={searchQuery}
+          onQueryChange={onSearchQueryChange}
+          locationLabel={searchLabel}
+          resultCount={legacySearchView.resultCount}
+        />
+        {legacySearchView.animeDocuments.length > 0 ? (
+          <LegacyCollectionItems
+            animeDocuments={legacySearchView.animeDocuments}
+            onRemoveAnime={onRemoveAnime}
+          />
+        ) : (
+          <LibrarySearchEmptyState query={searchQuery} />
+        )}
+      </>
+    );
   } else {
     content = (
       <EnabledCustomCollectionGrouping
@@ -174,6 +234,9 @@ const CustomCollectionSection = ({
         isLoading={isLoading}
         onRemoveAnime={onRemoveAnime}
         services={groupingServices}
+        searchQuery={searchQuery}
+        onSearchQueryChange={onSearchQueryChange}
+        searchLabel={searchLabel}
       />
     );
   }

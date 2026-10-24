@@ -14,7 +14,9 @@ const getFromCache = (key) => {
         return parsed.d;
       }
     }
-  } catch (e) {}
+  } catch {
+    // Cache reads are best effort in browsers with restricted storage.
+  }
   return null;
 };
 
@@ -24,14 +26,18 @@ const saveToCache = (key, data) => {
       `anilist:${key}`,
       JSON.stringify({ t: Date.now(), d: data })
     );
-  } catch (e) {}
+  } catch {
+    // Cache writes are best effort in browsers with restricted storage.
+  }
 };
 
-export const fetchAniList = async (query, variables = {}) => {
+export const fetchAniList = async (query, variables = {}, { bypassCache = false } = {}) => {
   const cacheKey = btoa(query + JSON.stringify(variables));
 
-  const cached = getFromCache(cacheKey);
-  if (cached) return cached;
+  if (!bypassCache) {
+    const cached = getFromCache(cacheKey);
+    if (cached) return cached;
+  }
 
   if (pendingRequests.has(cacheKey)) {
     return pendingRequests.get(cacheKey);
@@ -145,7 +151,7 @@ export const fetchJikan = async (path, options = {}) => {
      const query = `query { GenreCollection }`;
      const data = await fetchAniList(query);
      return {
-       data: data.GenreCollection.filter(g => g).map((g, idx) => ({ mal_id: g, name: g }))
+       data: data.GenreCollection.filter(g => g).map((g) => ({ mal_id: g, name: g }))
      };
   }
   
@@ -156,7 +162,7 @@ export const fetchJikan = async (path, options = {}) => {
   throw new Error("Jikan endpoint not mocked: " + path);
 };
 
-export const getAnime = async (animepath, options = {}) => {
+export const getAnime = async (animepath) => {
   let query = "";
   let variables = {};
 

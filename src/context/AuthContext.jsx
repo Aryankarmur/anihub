@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+/* eslint-disable react-refresh/only-export-components -- context hook and provider intentionally colocated */
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { serverTimestamp } from "firebase/firestore";
 import { auth } from "../firebase/firebaseConfig";
 import { registerUser, loginUser, logoutUser, resetUserPassword } from "../firebase/auth";
 import { getUserProfile, createUserProfile } from "../firebase/firestore";
+import { setProductionActiveUser } from "../firebase/productionActivation";
 
 const AuthContext = createContext();
 
@@ -17,6 +19,16 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        let claims = {};
+        if (typeof user.getIdTokenResult === "function") {
+          try {
+            claims = (await user.getIdTokenResult()).claims || {};
+          } catch (error) {
+            console.warn("Unable to read grouping rollout claims; UID rollout remains available.", error);
+          }
+        }
+        setProductionActiveUser({ uid: user.uid, claims });
+
         // Avoid duplicate syncs for the same user session to prevent unnecessary Firestore writes
         if (syncedUidRef.current !== user.uid) {
           syncedUidRef.current = user.uid;
@@ -40,6 +52,7 @@ export const AuthProvider = ({ children }) => {
         }
       } else {
         syncedUidRef.current = null;
+        setProductionActiveUser(null);
       }
       
       setCurrentUser(user);

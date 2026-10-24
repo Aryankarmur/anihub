@@ -104,7 +104,10 @@ export const resolveProductionCapabilities = ({
   // Emergency stop trigger
   if (remoteConfig.emergencyStop === true) {
     return {
-      dataCompatibility: remoteConfig.dataCompatibility !== false,
+      // This is deliberately not remotely switchable. Existing grouped data
+      // must remain movable/deletable even while all visible grouping and
+      // background reconciliation are stopped.
+      dataCompatibility: true,
       presentation: false,
       autoReconciliation: false,
       reason: "emergency_stop_active",
@@ -122,10 +125,13 @@ export const resolveProductionCapabilities = ({
   const isTargeted = isEligible || isGeneralAvailability;
 
   return {
-    dataCompatibility: remoteConfig.dataCompatibility !== false,
+    // Data compatibility is a cleanup/safety invariant, not a rollout flag.
+    dataCompatibility: true,
     presentation: isTargeted && remoteConfig.presentation === true,
     autoReconciliation: isTargeted && remoteConfig.autoReconciliation === true,
-    reason: isTargeted ? "canary_cohort_active" : "production_default_inactive",
+    reason: isGeneralAvailability
+      ? "general_availability_active"
+      : (isTargeted ? "canary_cohort_active" : "production_default_inactive"),
   };
 };
 

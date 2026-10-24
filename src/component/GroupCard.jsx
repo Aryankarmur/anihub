@@ -3,7 +3,14 @@ import GroupingImage from "./GroupingImage";
 import { getAnimeImage, getGroupId, getGroupThumbnailMember } from "./groupingUi";
 import "../assets/css/AnimeGrouping.css";
 
-const GroupCard = ({ group, members = [], onOpenGroup, onEditGroup, onDeleteGroup }) => {
+const GroupCard = ({
+  group,
+  members = [],
+  onOpenGroup,
+  onEditGroup,
+  onDeleteGroup,
+  showActions = true,
+}) => {
   const groupId = getGroupId(group);
   if (!groupId || group?.status !== "active" || members.length < 2) return null;
   const thumbnail = getGroupThumbnailMember(group, members);
@@ -25,14 +32,16 @@ const GroupCard = ({ group, members = [], onOpenGroup, onEditGroup, onDeleteGrou
           <span className="group-card-meta">{members.length} anime</span>
         </span>
       </button>
-      <div className="group-card-actions" aria-label={`${group.name} group actions`}>
-        <button type="button" onClick={() => onEditGroup?.(group)} aria-label={`Edit ${group.name} group`}>
-          <IoCreateOutline aria-hidden="true" />
-        </button>
-        <button type="button" className="danger" onClick={() => onDeleteGroup?.(group)} aria-label={`Delete ${group.name} group`}>
-          <IoTrashOutline aria-hidden="true" />
-        </button>
-      </div>
+      {showActions && (
+        <div className="group-card-actions" aria-label={`${group.name} group actions`}>
+          <button type="button" onClick={() => onEditGroup?.(group)} aria-label={`Edit ${group.name} group`}>
+            <IoCreateOutline aria-hidden="true" />
+          </button>
+          <button type="button" className="danger" onClick={() => onDeleteGroup?.(group)} aria-label={`Delete ${group.name} group`}>
+            <IoTrashOutline aria-hidden="true" />
+          </button>
+        </div>
+      )}
     </article>
   );
 };

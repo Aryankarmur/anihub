@@ -18,10 +18,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as groupingFeatureGate from "../firebase/groupingFeatureGate.js";
 
-const isAutoReconcileEnabled = () => {
+const isAutoReconcileEnabled = (uid) => {
   try {
     if (typeof groupingFeatureGate.isAutomaticReconciliationEnabled === "function") {
-      return groupingFeatureGate.isAutomaticReconciliationEnabled();
+      return groupingFeatureGate.isAutomaticReconciliationEnabled(uid);
     }
   } catch {
     // Fall back to isAnimeGroupingEnabled if mock does not define isAutomaticReconciliationEnabled
@@ -105,7 +105,7 @@ export function useAutoGrouping({
 
   useEffect(() => {
     // Prerequisites: feature gate, auth, scope, and data loaded.
-    if (!isAutoReconcileEnabled() || !uid || !scopeKey || isLoading) return;
+    if (!isAutoReconcileEnabled(uid) || !uid || !scopeKey || isLoading) return;
 
     // Compute fingerprint using only relation/groupId/exclusion fields
     // (not the full anime object to avoid false positives).
@@ -133,7 +133,7 @@ export function useAutoGrouping({
 
   /** Manually trigger a reconciliation pass (e.g. from "Organize Library" button). */
   const triggerReconcile = useCallback(async (options = {}) => {
-    if (!isAutoReconcileEnabled() || !uid || !scopeKey || isLoading) return;
+    if (!isAutoReconcileEnabled(uid) || !uid || !scopeKey || isLoading) return;
     lastFingerprintRef.current = null; // force re-run
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);

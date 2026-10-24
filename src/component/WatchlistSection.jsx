@@ -5,10 +5,15 @@ import GroupDeleteDialog from "./GroupDeleteDialog";
 import GroupDetail from "./GroupDetail";
 import GroupManagementModal from "./GroupManagementModal";
 import LibraryGrid from "./LibraryGrid";
+import LibrarySearch, { LibrarySearchEmptyState } from "./LibrarySearch";
 import SkeletonCard from "./SkeletonCard";
 import { getAnimeId, toCardAnime } from "./groupingUi";
 import { useAnimeGrouping } from "../hooks/useAnimeGrouping";
 import { useAutoGrouping } from "../hooks/useAutoGrouping";
+import {
+  createLibrarySearchView,
+  getVisibleGroupMembersForSearch,
+} from "../utils/librarySearch";
 
 const EmptyWatchlist = () => (
   <div className="library-empty-state">
@@ -72,6 +77,8 @@ const EnabledWatchlistGrouping = ({
   onRemoveAnime,
   isLoading,
   services,
+  searchQuery,
+  onSearchQueryChange,
 }) => {
   const grouping = useAnimeGrouping({
     uid,
@@ -86,9 +93,16 @@ const EnabledWatchlistGrouping = ({
     isLoading,
     services,
   });
-  const totalDisplayUnits = grouping.visibleGroups.length + grouping.standaloneAnime.length;
-  const hasMore = totalDisplayUnits > displayLimit;
-  const limitedDisplay = showAll ? null : displayLimit;
+  const searchView = createLibrarySearchView({
+    groups: grouping.groups,
+    animeDocuments,
+    query: searchQuery,
+  });
+  const totalDisplayUnits = searchView.isActive
+    ? searchView.resultCount
+    : grouping.visibleGroups.length + grouping.standaloneAnime.length;
+  const hasMore = !searchView.isActive && totalDisplayUnits > displayLimit;
+  const limitedDisplay = searchView.isActive || showAll ? null : displayLimit;
   const subscriptionError = grouping.error?.operation === "subscribe" ? grouping.error : null;
 
   const renderAnimeCard = (anime, inGroupDetail = false) => (
@@ -131,6 +145,13 @@ const EnabledWatchlistGrouping = ({
         )}
       </div>
 
+      <LibrarySearch
+        query={searchQuery}
+        onQueryChange={onSearchQueryChange}
+        locationLabel="Watchlist"
+        resultCount={searchView.resultCount}
+      />
+
       {subscriptionError && (
         <p className="grouping-subscription-warning" role="alert">
           Groups are temporarily unavailable. Every Watchlist anime is still shown below.
@@ -159,14 +180,23 @@ const EnabledWatchlistGrouping = ({
       {grouping.selectedGroup ? (
         <GroupDetail
           {...grouping.groupDetailProps}
+          visibleMembers={getVisibleGroupMembersForSearch({
+            group: grouping.selectedGroup,
+            members: grouping.selectedMembers,
+            query: searchQuery,
+          })}
+          searchQuery={searchQuery}
           renderAnimeCard={(anime) => renderAnimeCard(anime, true)}
         />
       ) : (
         <>
           <LibraryGrid
             {...grouping.libraryGridProps}
+            groups={searchView.groups}
+            animeDocuments={searchView.animeDocuments}
             displayLimit={limitedDisplay}
             renderAnimeCard={renderAnimeCard}
+            emptyState={<LibrarySearchEmptyState query={searchQuery} />}
           />
           {hasMore && (
             <div className="show-more-container">
@@ -194,8 +224,11 @@ const WatchlistSection = ({
   onRemoveAnime,
   groupingEnabled = false,
   groupingServices,
+  searchQuery = "",
+  onSearchQueryChange,
 }) => {
   const displayLimit = isMobile ? 6 : 12;
+  const legacySearchView = createLibrarySearchView({ animeDocuments, query: searchQuery });
 
 
   return (
@@ -208,6 +241,12 @@ const WatchlistSection = ({
       ) : animeDocuments.length === 0 ? (
         <>
           <h2 className="section-title">Watchlist</h2>
+          <LibrarySearch
+            query={searchQuery}
+            onQueryChange={onSearchQueryChange}
+            locationLabel="Watchlist"
+            resultCount={0}
+          />
           <EmptyWatchlist />
         </>
       ) : groupingEnabled && uid ? (
@@ -220,17 +259,29 @@ const WatchlistSection = ({
           onRemoveAnime={onRemoveAnime}
           isLoading={isLoading}
           services={groupingServices}
+          searchQuery={searchQuery}
+          onSearchQueryChange={onSearchQueryChange}
         />
       ) : (
         <>
           <h2 className="section-title">Watchlist</h2>
-          <LegacyWatchlist
-            animeDocuments={animeDocuments}
-            displayLimit={displayLimit}
-            showAll={showAll}
-            onToggleShowAll={onToggleShowAll}
-            onRemoveAnime={onRemoveAnime}
+          <LibrarySearch
+            query={searchQuery}
+            onQueryChange={onSearchQueryChange}
+            locationLabel="Watchlist"
+            resultCount={legacySearchView.resultCount}
           />
+          {legacySearchView.animeDocuments.length > 0 ? (
+            <LegacyWatchlist
+              animeDocuments={legacySearchView.animeDocuments}
+              displayLimit={displayLimit}
+              showAll={legacySearchView.isActive || showAll}
+              onToggleShowAll={onToggleShowAll}
+              onRemoveAnime={onRemoveAnime}
+            />
+          ) : (
+            <LibrarySearchEmptyState query={searchQuery} />
+          )}
         </>
       )}
     </div>

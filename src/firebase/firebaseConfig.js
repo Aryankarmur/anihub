@@ -12,6 +12,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
+export const configuredFirebaseProjectId = firebaseConfig.projectId;
+
 // Validate that the config exists to prevent confusing undefined errors
 if (!firebaseConfig.apiKey) {
   console.warn("Firebase configuration is missing! Please check your .env file.");
@@ -57,5 +59,4 @@ if (previewConfig.enabled) {
 }
 
 export default app;
-
 

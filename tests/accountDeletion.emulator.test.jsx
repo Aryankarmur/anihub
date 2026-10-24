@@ -19,14 +19,35 @@ import {
 } from "../src/firebase/firestore";
 import { getGroupNameReservationId } from "../src/firebase/groupingUtils";
 
-const productionRules = readFileSync(
-  "src/production-firestore-rules.txt",
-  "utf8",
-);
-const proposedRules = readFileSync("firestore.rules", "utf8");
+// Minimal pre-grouping permissions fixture. It intentionally has no `groups`
+// or `groupNameKeys` match so account cleanup exercises its safe legacy mode
+// without depending on a stale snapshot of production rules.
+const legacyOwnerOnlyRules = `
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      match /watchlist/{animeId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /completed/{animeId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /collections/{collectionId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+        match /items/{animeId} {
+          allow read, write: if request.auth != null && request.auth.uid == uid;
+        }
+      }
+    }
+  }
+}
+`;
+const currentRules = readFileSync("firestore.rules", "utf8");
 
-let productionEnv;
-let proposedEnv;
+let legacyEnv;
+let currentEnv;
 
 const userRef = (db, uid) => doc(db, "users", uid);
 const animeRef = (db, uid, scope, animeId) => doc(db, "users", uid, scope, animeId);
@@ -106,25 +127,25 @@ async function assertUserDataGone(environment, uid) {
 }
 
 beforeAll(async () => {
-  productionEnv = await initializeTestEnvironment({
-    projectId: "demo-anihub-f01-production-rules-account-delete",
-    firestore: { host: "127.0.0.1", port: 8080, rules: productionRules },
+  legacyEnv = await initializeTestEnvironment({
+    projectId: "demo-anihub-f01-legacy-rules-account-delete",
+    firestore: { host: "127.0.0.1", port: 8080, rules: legacyOwnerOnlyRules },
   });
-  proposedEnv = await initializeTestEnvironment({
-    projectId: "demo-anihub-f01-proposed-rules-account-delete",
-    firestore: { host: "127.0.0.1", port: 8080, rules: proposedRules },
+  currentEnv = await initializeTestEnvironment({
+    projectId: "demo-anihub-f01-current-rules-account-delete",
+    firestore: { host: "127.0.0.1", port: 8080, rules: currentRules },
   });
 });
 
 afterAll(async () => {
-  await productionEnv?.cleanup();
-  await proposedEnv?.cleanup();
+  await legacyEnv?.cleanup();
+  await currentEnv?.cleanup();
 });
 
 describe("account deletion compatibility", () => {
-  it("deletes a legacy account under production-equivalent permissions", async () => {
+  it("deletes a legacy account under owner-only pre-grouping permissions", async () => {
     const uid = "legacy-user";
-    await productionEnv.withSecurityRulesDisabled(async (context) => {
+    await legacyEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(userRef(db, uid), { displayName: "Legacy" });
       await setDoc(animeRef(db, uid, "watchlist", "1"), { animeId: "1" });
@@ -136,23 +157,23 @@ describe("account deletion compatibility", () => {
     });
 
     const result = await deleteUserDataFromFirestore(
-      productionEnv.authenticatedContext(uid).firestore(),
+      legacyEnv.authenticatedContext(uid).firestore(),
       uid,
     );
 
     expect(result.data.mode).toBe("legacy");
     expect(result.data.profileDeleted).toBe(true);
-    await assertUserDataGone(productionEnv, uid);
+    await assertUserDataGone(legacyEnv, uid);
   });
 
   it("refuses legacy fallback when the profile records grouping data", async () => {
     const uid = "blocked-legacy-fallback";
-    await productionEnv.withSecurityRulesDisabled(async (context) => {
+    await legacyEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(userRef(db, uid), { groupingState: { hasData: true } });
       await setDoc(animeRef(db, uid, "watchlist", "1"), { animeId: "1" });
     });
-    const db = productionEnv.authenticatedContext(uid).firestore();
+    const db = legacyEnv.authenticatedContext(uid).firestore();
 
     await expect(deleteUserDataFromFirestore(db, uid)).rejects.toMatchObject({
       code: "grouping/account-cleanup-unavailable",
@@ -163,7 +184,7 @@ describe("account deletion compatibility", () => {
 
   it("deletes grouped data with each group and reservation handled together", async () => {
     const uid = "grouped-user";
-    await proposedEnv.withSecurityRulesDisabled(async (context) => {
+    await currentEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(userRef(db, uid), { groupingState: { hasData: true } });
       await seedGroup(db, uid, "group-a", ["1", "2"], { groupType: "automatic" });
@@ -171,18 +192,18 @@ describe("account deletion compatibility", () => {
     });
 
     const result = await deleteUserDataFromFirestore(
-      proposedEnv.authenticatedContext(uid).firestore(),
+      currentEnv.authenticatedContext(uid).firestore(),
       uid,
     );
 
     expect(result.data.mode).toBe("group-aware");
     expect(result.data.deletedGroupIds).toHaveLength(2);
-    await assertUserDataGone(proposedEnv, uid);
+    await assertUserDataGone(currentEnv, uid);
   });
 
   it("deletes grouped custom Collections while decrementing their integrity counter", async () => {
     const uid = "grouped-collection-user";
-    await proposedEnv.withSecurityRulesDisabled(async (context) => {
+    await currentEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(userRef(db, uid), { groupingState: { hasData: true } });
       await seedGroup(db, uid, "collection-group", ["1", "2"], {
@@ -191,18 +212,18 @@ describe("account deletion compatibility", () => {
     });
 
     const result = await deleteUserDataFromFirestore(
-      proposedEnv.authenticatedContext(uid).firestore(),
+      currentEnv.authenticatedContext(uid).firestore(),
       uid,
     );
 
     expect(result.data.deletedGroupIds).toEqual(["collection-group"]);
     expect(result.data.deletedCollectionItems).toBe(2);
-    await assertUserDataGone(proposedEnv, uid);
+    await assertUserDataGone(currentEnv, uid);
   });
 
   it("crosses bounded document batches without splitting group dependencies", async () => {
     const uid = "large-user";
-    await proposedEnv.withSecurityRulesDisabled(async (context) => {
+    await currentEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(userRef(db, uid), { groupingState: { hasData: true } });
       const batch = writeBatch(db);
@@ -220,24 +241,24 @@ describe("account deletion compatibility", () => {
     });
 
     const result = await deleteUserDataFromFirestore(
-      proposedEnv.authenticatedContext(uid).firestore(),
+      currentEnv.authenticatedContext(uid).firestore(),
       uid,
     );
 
     expect(result.data.deletedGroupIds).toHaveLength(3);
     expect(result.data.deletedWatchlist).toBe(205);
-    await assertUserDataGone(proposedEnv, uid);
+    await assertUserDataGone(currentEnv, uid);
   });
 
   it("keeps interrupted cleanup retryable and deletes the profile last", async () => {
     const uid = "retry-user";
-    await proposedEnv.withSecurityRulesDisabled(async (context) => {
+    await currentEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(userRef(db, uid), { groupingState: { hasData: true } });
       await seedGroup(db, uid, "retry-a", ["1", "2"]);
       await seedGroup(db, uid, "retry-b", ["3", "4"]);
     });
-    const db = proposedEnv.authenticatedContext(uid).firestore();
+    const db = currentEnv.authenticatedContext(uid).firestore();
     let groupCalls = 0;
 
     await expect(deleteUserDataFromFirestore(db, uid, {
@@ -256,18 +277,18 @@ describe("account deletion compatibility", () => {
     expect((await getDoc(userRef(db, uid))).exists()).toBe(true);
 
     await deleteUserDataFromFirestore(db, uid);
-    await assertUserDataGone(proposedEnv, uid);
+    await assertUserDataGone(currentEnv, uid);
   });
 
   it("cannot delete another user's data", async () => {
-    await proposedEnv.withSecurityRulesDisabled(async (context) => {
+    await currentEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(userRef(context.firestore(), "target-user"), { displayName: "Target" });
     });
     await assertFails(deleteUserDataFromFirestore(
-      proposedEnv.authenticatedContext("attacker").firestore(),
+      currentEnv.authenticatedContext("attacker").firestore(),
       "target-user",
     ));
-    await proposedEnv.withSecurityRulesDisabled(async (context) => {
+    await currentEnv.withSecurityRulesDisabled(async (context) => {
       expect((await getDoc(userRef(context.firestore(), "target-user"))).exists()).toBe(true);
     });
   });

@@ -5,10 +5,15 @@ import GroupDeleteDialog from "./GroupDeleteDialog";
 import GroupDetail from "./GroupDetail";
 import GroupManagementModal from "./GroupManagementModal";
 import LibraryGrid from "./LibraryGrid";
+import LibrarySearch, { LibrarySearchEmptyState } from "./LibrarySearch";
 import SkeletonCard from "./SkeletonCard";
 import { getAnimeId, toCardAnime } from "./groupingUi";
 import { useAnimeGrouping } from "../hooks/useAnimeGrouping";
 import { useAutoGrouping } from "../hooks/useAutoGrouping";
+import {
+  createLibrarySearchView,
+  getVisibleGroupMembersForSearch,
+} from "../utils/librarySearch";
 
 const CompletedEmptyState = () => (
   <div className="library-empty-state">
@@ -52,6 +57,8 @@ const EnabledCompletedGrouping = ({
   onRemoveAnime,
   isLoading,
   services,
+  searchQuery,
+  onSearchQueryChange,
 }) => {
   const grouping = useAnimeGrouping({
     uid,
@@ -67,6 +74,11 @@ const EnabledCompletedGrouping = ({
     services,
   });
   const subscriptionError = grouping.error?.operation === "subscribe" ? grouping.error : null;
+  const searchView = createLibrarySearchView({
+    groups: grouping.groups,
+    animeDocuments,
+    query: searchQuery,
+  });
   const renderAnimeCard = (anime, inGroupDetail = false) => (
     <CompletedAnimeCard
       anime={anime}
@@ -77,6 +89,13 @@ const EnabledCompletedGrouping = ({
 
   return (
     <>
+      <LibrarySearch
+        query={searchQuery}
+        onQueryChange={onSearchQueryChange}
+        locationLabel="Completed"
+        resultCount={searchView.resultCount}
+      />
+
       {!grouping.selectedGroup && (
         <div className="completed-grouping-toolbar auto-grouping-toolbar">
           <button
@@ -132,10 +151,22 @@ const EnabledCompletedGrouping = ({
       {grouping.selectedGroup ? (
         <GroupDetail
           {...grouping.groupDetailProps}
+          visibleMembers={getVisibleGroupMembersForSearch({
+            group: grouping.selectedGroup,
+            members: grouping.selectedMembers,
+            query: searchQuery,
+          })}
+          searchQuery={searchQuery}
           renderAnimeCard={(anime) => renderAnimeCard(anime, true)}
         />
       ) : (
-        <LibraryGrid {...grouping.libraryGridProps} renderAnimeCard={renderAnimeCard} />
+        <LibraryGrid
+          {...grouping.libraryGridProps}
+          groups={searchView.groups}
+          animeDocuments={searchView.animeDocuments}
+          renderAnimeCard={renderAnimeCard}
+          emptyState={<LibrarySearchEmptyState query={searchQuery} />}
+        />
       )}
 
       <GroupManagementModal {...grouping.managementModalProps} />
@@ -151,7 +182,10 @@ const CompletedSection = ({
   onRemoveAnime,
   groupingEnabled = false,
   groupingServices,
+  searchQuery = "",
+  onSearchQueryChange,
 }) => {
+  const legacySearchView = createLibrarySearchView({ animeDocuments, query: searchQuery });
   let content;
   if (isLoading) {
     content = (
@@ -160,9 +194,36 @@ const CompletedSection = ({
       </div>
     );
   } else if (animeDocuments.length === 0) {
-    content = <CompletedEmptyState />;
+    content = (
+      <>
+        <LibrarySearch
+          query={searchQuery}
+          onQueryChange={onSearchQueryChange}
+          locationLabel="Completed"
+          resultCount={0}
+        />
+        <CompletedEmptyState />
+      </>
+    );
   } else if (!groupingEnabled || !uid) {
-    content = <LegacyCompletedItems animeDocuments={animeDocuments} onRemoveAnime={onRemoveAnime} />;
+    content = (
+      <>
+        <LibrarySearch
+          query={searchQuery}
+          onQueryChange={onSearchQueryChange}
+          locationLabel="Completed"
+          resultCount={legacySearchView.resultCount}
+        />
+        {legacySearchView.animeDocuments.length > 0 ? (
+          <LegacyCompletedItems
+            animeDocuments={legacySearchView.animeDocuments}
+            onRemoveAnime={onRemoveAnime}
+          />
+        ) : (
+          <LibrarySearchEmptyState query={searchQuery} />
+        )}
+      </>
+    );
   } else {
     content = (
       <EnabledCompletedGrouping
@@ -171,6 +232,8 @@ const CompletedSection = ({
         isLoading={isLoading}
         onRemoveAnime={onRemoveAnime}
         services={groupingServices}
+        searchQuery={searchQuery}
+        onSearchQueryChange={onSearchQueryChange}
       />
     );
   }

@@ -28,10 +28,10 @@ import {
 } from "./firestore.js";
 import * as groupingFeatureGate from "./groupingFeatureGate.js";
 
-const isAutoReconcileEnabled = () => {
+const isAutoReconcileEnabled = (uid) => {
   try {
     if (typeof groupingFeatureGate.isAutomaticReconciliationEnabled === "function") {
-      return groupingFeatureGate.isAutomaticReconciliationEnabled();
+      return groupingFeatureGate.isAutomaticReconciliationEnabled(uid);
     }
   } catch {
     // Fall back to isAnimeGroupingEnabled if mock does not define isAutomaticReconciliationEnabled
@@ -677,7 +677,7 @@ export async function runAutoGroupingReconciliation({
   onResult,
   services = {},
 }) {
-  if (!isAutoReconcileEnabled()) return null;
+  if (!isAutoReconcileEnabled(uid)) return null;
 
   try {
     validateUid(uid);

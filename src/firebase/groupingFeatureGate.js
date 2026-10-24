@@ -1,4 +1,5 @@
-import { isIsolatedFirebasePreview } from "./firebaseConfig";
+import { configuredFirebaseProjectId, isIsolatedFirebasePreview } from "./firebaseConfig";
+import { evaluateLocalhostGroupingAccess } from "./localGroupingDevelopment";
 import {
   DEFAULT_PRODUCTION_CAPABILITIES,
   getProductionCapabilities,
@@ -60,6 +61,28 @@ export const evaluateAnimeGroupingGate = ({ featureRequested, isolatedEmulator }
 
 let runtimeOverrides = null;
 
+const getEnvironment = () => (
+  (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : {}
+);
+
+export const isLocalhostGroupingDevelopmentEnabled = (activeUid) => {
+  const env = getEnvironment();
+  const hostname = typeof globalThis.location?.hostname === "string"
+    ? globalThis.location.hostname
+    : "";
+
+  return evaluateLocalhostGroupingAccess({
+    isDevelopment: env.DEV === true && env.MODE === "development",
+    isProduction: env.PROD === true,
+    hostname,
+    projectId: configuredFirebaseProjectId,
+    explicitlyEnabled: env.VITE_ENABLE_LOCALHOST_GROUPING === "true",
+    allowedUid: env.VITE_LOCALHOST_GROUPING_TEST_UID,
+    activeUid,
+    emulatorRequested: env.VITE_FIREBASE_USE_EMULATOR === "true",
+  });
+};
+
 export const setGroupingCapabilityOverrides = (overrides) => {
   runtimeOverrides = overrides ? { ...overrides } : null;
 };
@@ -73,21 +96,31 @@ export const isAnimeGroupingEnabled = evaluateAnimeGroupingGate({
   isolatedEmulator: isIsolatedFirebasePreview,
 });
 
-export const isGroupingDataCompatibilityEnabled = () => {
+export const isGroupingDataCompatibilityEnabled = (activeUid) => {
   if (runtimeOverrides && typeof runtimeOverrides.dataCompatibility === "boolean") {
     return runtimeOverrides.dataCompatibility;
   }
   const env = (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : {};
+  // Production cleanup compatibility is deliberately not remotely or
+  // environmentally disableable. It is required to safely move/delete data
+  // created while presentation or reconciliation was enabled.
+  if (env.PROD === true) {
+    return getProductionCapabilities().dataCompatibility;
+  }
   if (env.VITE_ENABLE_GROUPING_DATA_COMPATIBILITY === "false") {
     return false;
   }
   if (isIsolatedFirebasePreview || Boolean(isAnimeGroupingEnabled)) {
     return true;
   }
+  if (
+    isLocalhostGroupingDevelopmentEnabled(activeUid)
+    && env.VITE_ENABLE_GROUPING_DATA_COMPATIBILITY === "true"
+  ) return true;
   return getProductionCapabilities().dataCompatibility;
 };
 
-export const isGroupingPresentationEnabled = () => {
+export const isGroupingPresentationEnabled = (activeUid) => {
   if (runtimeOverrides && typeof runtimeOverrides.presentation === "boolean") {
     return runtimeOverrides.presentation;
   }
@@ -98,10 +131,14 @@ export const isGroupingPresentationEnabled = () => {
   if (isIsolatedFirebasePreview || Boolean(isAnimeGroupingEnabled)) {
     return Boolean(isAnimeGroupingEnabled);
   }
+  if (
+    isLocalhostGroupingDevelopmentEnabled(activeUid)
+    && env.VITE_ENABLE_GROUPING_PRESENTATION === "true"
+  ) return true;
   return getProductionCapabilities().presentation;
 };
 
-export const isAutomaticReconciliationEnabled = () => {
+export const isAutomaticReconciliationEnabled = (activeUid) => {
   if (runtimeOverrides && typeof runtimeOverrides.autoReconciliation === "boolean") {
     return runtimeOverrides.autoReconciliation;
   }
@@ -112,6 +149,10 @@ export const isAutomaticReconciliationEnabled = () => {
   if (isIsolatedFirebasePreview || Boolean(isAnimeGroupingEnabled)) {
     return Boolean(isAnimeGroupingEnabled);
   }
+  if (
+    isLocalhostGroupingDevelopmentEnabled(activeUid)
+    && env.VITE_ENABLE_AUTOMATIC_GROUPING === "true"
+  ) return true;
   return getProductionCapabilities().autoReconciliation;
 };
 
