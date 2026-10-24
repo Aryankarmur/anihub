@@ -11,11 +11,11 @@
  * - A debounce delay (default 600 ms) prevents bursts during rapid Firestore
  *   snapshot delivery.
  * - A running lock prevents overlapping reconciliation passes for the same scope.
- * - Gate check: does nothing when isAnimeGroupingEnabled is false.
+ * - Gate check: does nothing when automatic reconciliation is unavailable.
  * - Does not write directly to Firestore; delegates to runAutoGroupingReconciliation.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import * as groupingFeatureGate from "../firebase/groupingFeatureGate.js";
 
 const isAutoReconcileEnabled = (uid) => {
@@ -55,14 +55,28 @@ export function useAutoGrouping({
   isLoading = false,
   services = {},
 } = {}) {
-  const [isReconciling, setIsReconciling] = useState(false);
-  const [lastResult, setLastResult] = useState(null);
+  const identityKey = uid && scopeKey ? `${uid}\u0000${scopeKey}` : "";
+  const [status, setStatus] = useState({
+    identityKey: "",
+    isReconciling: false,
+    lastResult: null,
+  });
 
   // Refs that survive re-renders without causing them.
-  const runningRef = useRef(false);
+  const activeIdentityRef = useRef(identityKey);
+  const runningIdentitiesRef = useRef(new Set());
   const timerRef = useRef(null);
   const lastFingerprintRef = useRef(null);
   const mountedRef = useRef(true);
+
+  useLayoutEffect(() => {
+    activeIdentityRef.current = identityKey;
+    lastFingerprintRef.current = null;
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [identityKey]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -77,27 +91,48 @@ export function useAutoGrouping({
 
   const doReconcile = useCallback(
     async (docs, currentUid, currentScopeKey) => {
-      if (runningRef.current) return;
-      runningRef.current = true;
-      if (mountedRef.current) setIsReconciling(true);
+      const reconciliationIdentity = `${currentUid}\u0000${currentScopeKey}`;
+      if (
+        !currentUid
+        || !currentScopeKey
+        || activeIdentityRef.current !== reconciliationIdentity
+        || runningIdentitiesRef.current.has(reconciliationIdentity)
+      ) return;
+
+      runningIdentitiesRef.current.add(reconciliationIdentity);
+      let completedResult = null;
+      if (mountedRef.current) {
+        setStatus((current) => ({
+          identityKey: reconciliationIdentity,
+          isReconciling: true,
+          lastResult: current.identityKey === reconciliationIdentity
+            ? current.lastResult
+            : null,
+        }));
+      }
 
       try {
         const reconcileFn =
           services?.runAutoGroupingReconciliation || runAutoGroupingReconciliation;
-        const result = await reconcileFn({
+        completedResult = await reconcileFn({
           uid: currentUid,
           scopeKey: currentScopeKey,
           animeDocuments: docs,
           services,
         });
-        if (mountedRef.current && result) {
-          setLastResult(result);
-        }
       } catch (error) {
         console.warn("[useAutoGrouping] reconciliation error:", error?.message ?? error);
       } finally {
-        runningRef.current = false;
-        if (mountedRef.current) setIsReconciling(false);
+        runningIdentitiesRef.current.delete(reconciliationIdentity);
+        if (mountedRef.current && activeIdentityRef.current === reconciliationIdentity) {
+          setStatus((current) => ({
+            identityKey: reconciliationIdentity,
+            isReconciling: false,
+            lastResult: completedResult || (
+              current.identityKey === reconciliationIdentity ? current.lastResult : null
+            ),
+          }));
+        }
       }
     },
     [services],
@@ -105,18 +140,26 @@ export function useAutoGrouping({
 
   useEffect(() => {
     // Prerequisites: feature gate, auth, scope, and data loaded.
-    if (!isAutoReconcileEnabled(uid) || !uid || !scopeKey || isLoading) return;
+    if (!isAutoReconcileEnabled(uid) || !uid || !scopeKey || isLoading) {
+      // Account/scope changes and sign-out invalidate pending work immediately.
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      lastFingerprintRef.current = null;
+      return;
+    }
 
     // Compute fingerprint using only relation/groupId/exclusion fields
     // (not the full anime object to avoid false positives).
-    const fingerprint = buildStateFingerprint(animeDocuments, []);
+    const fingerprint = `${identityKey}|${buildStateFingerprint(animeDocuments, [])}`;
 
     if (fingerprint === lastFingerprintRef.current) return;
     lastFingerprintRef.current = fingerprint;
 
-    // Debounce: cancel any pending reconciliation triggered by a previous snapshot.
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
 
     const capturedDocs = animeDocuments;
@@ -125,7 +168,7 @@ export function useAutoGrouping({
 
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      if (mountedRef.current) {
+      if (mountedRef.current && activeIdentityRef.current === identityKey) {
         void doReconcile(capturedDocs, capturedUid, capturedScopeKey);
       }
     }, DEBOUNCE_MS);
@@ -134,6 +177,7 @@ export function useAutoGrouping({
   /** Manually trigger a reconciliation pass (e.g. from "Organize Library" button). */
   const triggerReconcile = useCallback(async (options = {}) => {
     if (!isAutoReconcileEnabled(uid) || !uid || !scopeKey || isLoading) return;
+    const requestedIdentity = `${uid}\u0000${scopeKey}`;
     lastFingerprintRef.current = null; // force re-run
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
@@ -156,10 +200,15 @@ export function useAutoGrouping({
         console.warn("[useAutoGrouping] backfill error:", err);
       }
     }
+    if (activeIdentityRef.current !== requestedIdentity) return;
     void doReconcile(docs, uid, scopeKey);
   }, [animeDocuments, doReconcile, isLoading, scopeKey, services, uid]);
 
-  return { isReconciling, lastResult, triggerReconcile };
+  return {
+    isReconciling: status.identityKey === identityKey && status.isReconciling,
+    lastResult: status.identityKey === identityKey ? status.lastResult : null,
+    triggerReconcile,
+  };
 }
 
 export default useAutoGrouping;
