@@ -144,6 +144,8 @@ describe("individual library search", () => {
     render(<ControlledWatchlist groupingEnabled fixture={fixture} />);
     await emitGroup(fixture);
 
+    expect(screen.getByRole("button", { name: /organize library/i })).toBeInTheDocument();
+
     fireEvent.change(screen.getByRole("searchbox", { name: "Search Watchlist" }), {
       target: { value: "brotherhood" },
     });

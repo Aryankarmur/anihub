@@ -27,17 +27,7 @@ import {
   partitionAnimeByVisibleGroups,
 } from "../src/firebase/groupingUtils";
 import {
-  DEFAULT_PRODUCTION_CAPABILITIES,
-  getProductionCapabilities,
-  hashUidToPercent,
-  isUserEligibleForCanary,
-  resolveProductionCapabilities,
-  setProductionRemoteConfig,
-  setProductionRemoteConfigError,
-  setProductionActiveUser,
-  resetProductionActivation,
-} from "../src/firebase/productionActivation";
-import {
+  evaluateProductionGroupingAccess,
   isGroupingDataCompatibilityEnabled,
   isGroupingPresentationEnabled,
   isAutomaticReconciliationEnabled,
@@ -74,7 +64,6 @@ describe("AniHub F01 Phase G1.5 — Production Activation & Preflight Test Suite
       throw new Error("Refusing to run preflight suite outside isolated preview emulators.");
     }
     resetGroupingCapabilityOverrides();
-    resetProductionActivation();
 
     // Create canary user
     canaryCred = await createUserWithEmailAndPassword(auth, canaryEmail, password);
@@ -84,7 +73,6 @@ describe("AniHub F01 Phase G1.5 — Production Activation & Preflight Test Suite
 
   afterAll(async () => {
     resetGroupingCapabilityOverrides();
-    resetProductionActivation();
 
     if (canaryCred?.user) {
       try {
@@ -104,109 +92,68 @@ describe("AniHub F01 Phase G1.5 — Production Activation & Preflight Test Suite
     }
   });
 
-  // 1. Production capabilities disabled by default
-  it("1. enforces production capabilities disabled by default (dataCompatibility=true, presentation=false, autoReconcile=false)", () => {
-    expect(DEFAULT_PRODUCTION_CAPABILITIES).toEqual({
+  // 1. Production capabilities for authenticated users
+  it("1. enables production presentation and reconciliation for every authenticated AniHub user", () => {
+    expect(evaluateProductionGroupingAccess({
+      isProduction: true,
+      projectId: "anihub-73f72",
+      activeUid: canaryUid,
+    })).toEqual({
+      dataCompatibility: true,
+      presentation: true,
+      autoReconciliation: true,
+    });
+
+    expect(evaluateProductionGroupingAccess({
+      isProduction: true,
+      projectId: "anihub-73f72",
+      activeUid: "future-registration-with-no-rollout-entry",
+    })).toEqual({
+      dataCompatibility: true,
+      presentation: true,
+      autoReconciliation: true,
+    });
+  });
+
+  // 2. Authentication boundary
+  it("2. keeps user-specific grouping disabled without an authenticated UID", () => {
+    for (const activeUid of [undefined, null, "", "   "]) {
+      expect(evaluateProductionGroupingAccess({
+        isProduction: true,
+        projectId: "anihub-73f72",
+        activeUid,
+      })).toEqual({
+        dataCompatibility: true,
+        presentation: false,
+        autoReconciliation: false,
+      });
+    }
+  });
+
+  // 3. Project boundary
+  it("3. rejects production grouping on an unexpected Firebase project", () => {
+    expect(evaluateProductionGroupingAccess({
+      isProduction: true,
+      projectId: "unexpected-project",
+      activeUid: canaryUid,
+    })).toEqual({
       dataCompatibility: true,
       presentation: false,
       autoReconciliation: false,
     });
-
-    const defaultState = resolveProductionCapabilities();
-    expect(defaultState.dataCompatibility).toBe(true);
-    expect(defaultState.presentation).toBe(false);
-    expect(defaultState.autoReconciliation).toBe(false);
-    expect(defaultState.reason).toBe("default_production_baseline");
   });
 
-  // 2. Remote configuration unavailable / fail-closed fallback
-  it("2. fails closed safely when remote configuration cannot be retrieved or network times out", () => {
-    const errorState = resolveProductionCapabilities({
-      fetchError: new Error("Network timeout contacting Remote Config provider"),
+  // 4. Cleanup compatibility cannot be disabled
+  it("4. keeps data compatibility unconditional while test-only UI controls are disabled", () => {
+    setGroupingCapabilityOverrides({
+      dataCompatibility: false,
+      presentation: false,
+      autoReconciliation: false,
     });
-
-    expect(errorState.dataCompatibility).toBe(true); // NEVER disable data compatibility on error
-    expect(errorState.presentation).toBe(false);    // UI features fail closed
-    expect(errorState.autoReconciliation).toBe(false);
-    expect(errorState.reason).toBe("remote_config_error_fallback");
-
-    // Also verify via in-memory manager
-    setProductionRemoteConfigError(new Error("Firebase Remote Config offline"));
-    const managedState = getProductionCapabilities();
-    expect(managedState.presentation).toBe(false);
-    expect(managedState.autoReconciliation).toBe(false);
-    expect(managedState.dataCompatibility).toBe(true);
-    resetProductionActivation();
-  });
-
-  // 3. Internal / Canary eligibility & deterministic hashing
-  it("3. evaluates canary eligibility deterministically using allowlists, claims, and stable UID hashes", () => {
-    // A. Explicit allowlist
-    expect(isUserEligibleForCanary({ uid: "user-alpha", canaryUids: ["user-alpha", "user-beta"] })).toBe(true);
-    expect(isUserEligibleForCanary({ uid: "user-gamma", canaryUids: ["user-alpha", "user-beta"] })).toBe(false);
-
-    // B. Custom auth claims
-    expect(isUserEligibleForCanary({ uid: "user-gamma", claims: { groupingCanary: true } })).toBe(true);
-    expect(isUserEligibleForCanary({ uid: "user-gamma", claims: { admin: true } })).toBe(true);
-    expect(isUserEligibleForCanary({ uid: "user-gamma", claims: { regularUser: true } })).toBe(false);
-
-    // C. Deterministic UID hashing
-    const hash1 = hashUidToPercent("fixed-uid-12345");
-    const hash2 = hashUidToPercent("fixed-uid-12345");
-    expect(hash1).toBe(hash2);
-    expect(hash1).toBeGreaterThanOrEqual(0);
-    expect(hash1).toBeLessThan(100);
-
-    // D. Percentage rollout threshold
-    expect(isUserEligibleForCanary({ uid: "fixed-uid-12345", canaryPercentage: 0 })).toBe(false);
-    expect(isUserEligibleForCanary({ uid: "fixed-uid-12345", canaryPercentage: 100 })).toBe(true);
-  });
-
-  // 4. Remote configuration canary rollout & emergency stop
-  it("4. activates presentation and auto-reconciliation for canary cohort, and supports immediate emergency stop", () => {
-    const remoteConfig = {
-      presentation: true,
-      autoReconciliation: true,
-      canaryUids: [canaryUid],
-      canaryPercentage: 0,
-      emergencyStop: false,
-    };
-
-    // User in canary:
-    const activeCanaryState = resolveProductionCapabilities({
-      remoteConfig,
-      user: { uid: canaryUid },
-    });
-    expect(activeCanaryState.presentation).toBe(true);
-    expect(activeCanaryState.autoReconciliation).toBe(true);
-    expect(activeCanaryState.dataCompatibility).toBe(true);
-    expect(activeCanaryState.reason).toBe("canary_cohort_active");
-
-    // User NOT in canary:
-    const nonCanaryState = resolveProductionCapabilities({
-      remoteConfig,
-      user: { uid: "other-user-not-in-canary" },
-    });
-    expect(nonCanaryState.presentation).toBe(false);
-    expect(nonCanaryState.autoReconciliation).toBe(false);
-    expect(nonCanaryState.dataCompatibility).toBe(true);
-
-    // Emergency kill switch triggered:
-    const emergencyState = resolveProductionCapabilities({
-      remoteConfig: { ...remoteConfig, emergencyStop: true },
-      user: { uid: canaryUid },
-    });
-    expect(emergencyState.presentation).toBe(false);
-    expect(emergencyState.autoReconciliation).toBe(false);
-    expect(emergencyState.dataCompatibility).toBe(true); // data compatibility preserved!
-    expect(emergencyState.reason).toBe("emergency_stop_active");
-
-    // Verify in-memory manager methods:
-    setProductionRemoteConfig(remoteConfig);
-    setProductionActiveUser({ uid: canaryUid });
-    expect(getProductionCapabilities().presentation).toBe(true);
-    resetProductionActivation();
-    expect(getProductionCapabilities().presentation).toBe(false);
+    expect(isGroupingDataCompatibilityEnabled(canaryUid)).toBe(true);
+    expect(isGroupingPresentationEnabled(canaryUid)).toBe(false);
+    expect(isAutomaticReconciliationEnabled(canaryUid)).toBe(false);
+    resetGroupingCapabilityOverrides();
   });
 
   // 5. Presentation disabled while grouped data exists in Firestore

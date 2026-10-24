@@ -6,6 +6,7 @@ vi.mock("../src/firebase/firebaseConfig", () => ({
 }));
 
 import {
+  evaluateProductionGroupingAccess,
   isAutomaticReconciliationEnabled,
   isGroupingDataCompatibilityEnabled,
   isGroupingPresentationEnabled,
@@ -43,11 +44,27 @@ describe("localhost grouping feature gate", () => {
     expect(isAutomaticReconciliationEnabled("another-user")).toBe(false);
   });
 
-  it("keeps production builds disabled even when local flags are present", () => {
+  it("ignores localhost flags in production and enables every authenticated AniHub user", () => {
     vi.stubEnv("DEV", false);
     vi.stubEnv("PROD", true);
     vi.stubEnv("MODE", "production");
-    expect(isGroupingPresentationEnabled("approved-test-uid")).toBe(false);
-    expect(isAutomaticReconciliationEnabled("approved-test-uid")).toBe(false);
+    expect(isGroupingPresentationEnabled("approved-test-uid")).toBe(true);
+    expect(isAutomaticReconciliationEnabled("approved-test-uid")).toBe(true);
+    expect(isGroupingPresentationEnabled("future-user-with-no-allowlist-entry")).toBe(true);
+    expect(isAutomaticReconciliationEnabled("future-user-with-no-allowlist-entry")).toBe(true);
+    expect(isGroupingPresentationEnabled("")).toBe(false);
+    expect(isAutomaticReconciliationEnabled()).toBe(false);
+  });
+
+  it("requires the approved Firebase project in production", () => {
+    expect(evaluateProductionGroupingAccess({
+      isProduction: true,
+      projectId: "another-project",
+      activeUid: "signed-in-user",
+    })).toEqual({
+      dataCompatibility: true,
+      presentation: false,
+      autoReconciliation: false,
+    });
   });
 });
