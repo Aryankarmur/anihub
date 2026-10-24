@@ -1,15 +1,24 @@
 import { Link, NavLink, Outlet, useOutletContext, useNavigate } from "react-router-dom";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { FaRegStar } from "react-icons/fa6";
-import { IoBookmarkOutline } from "react-icons/io5";
+import { IoBookmarkOutline, IoCheckmarkCircleOutline } from "react-icons/io5";
 import "../assets/css/Animeinfo.css";
 import Card from "../component/Card";
-import { fetchJikan } from "../api/Fetch";
 import SkeletonCard from "../component/SkeletonCard";
 import CollectionModal from "../component/CollectionModal";
 import { useAuth } from "../context/AuthContext";
-import { addToWatchlist, removeFromWatchlist, checkInWatchlist } from "../firebase/firestore";
+import { 
+  addToWatchlist, 
+  removeFromWatchlist, 
+  checkInWatchlist,
+  checkInCompleted,
+  addToCompleted,
+  removeFromCompleted,
+  getFirestoreErrorMessage
+} from "../firebase/firestore";
+import { writeCachedRelations } from "../firebase/autoGroupingService";
+import { selectAutomaticGroupingRelations } from "../firebase/anilistRelations";
 
 const LoadingState = ({ message = "Loading..." }) => (
   <div className="load-state">
@@ -93,8 +102,9 @@ const Animeinfo = () => {
   const { currentUser } = useAuth();
   
   const [inWatchlist, setInWatchlist] = useState(false);
-  const [watchlistLoading, setWatchlistLoading] = useState(false);
-  const [watchlistError, setWatchlistError] = useState("");
+  const [inCompleted, setInCompleted] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState("");
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
 
   useEffect(() => {
@@ -178,6 +188,17 @@ const Animeinfo = () => {
 
         if (!isMounted) return;
 
+        const anilistRelations = selectAutomaticGroupingRelations((media.relations?.edges || [])
+          .filter(edge => edge?.node?.type === "ANIME" && edge.node?.id)
+          .map(edge => ({
+            relatedId: String(edge.node.id),
+            relationType: String(edge.relationType || "").toUpperCase()
+          })));
+
+        if (media.id && anilistRelations.length > 0) {
+          writeCachedRelations(String(media.id), anilistRelations);
+        }
+
         setAnimefulldata({
           mal_id: media.id,
           title: media.title.english || media.title.romaji,
@@ -195,7 +216,8 @@ const Animeinfo = () => {
           source: media.source,
           duration: media.duration ? `${media.duration} min` : "Unknown",
           synopsis: media.description,
-          background: ""
+          background: "",
+          anilistRelations,
         });
 
         const groupedRelations = {};
@@ -281,25 +303,37 @@ const Animeinfo = () => {
     };
   }, [id]);
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchWatchlistState = async () => {
-      if (currentUser && animefulldata?.mal_id) {
-        try {
-          const { data, error } = await checkInWatchlist(currentUser.uid, animefulldata.mal_id);
-          if (isMounted && data !== undefined) {
-            setInWatchlist(data);
-          }
-        } catch (e) {
-          console.error("Watchlist check error:", e);
+  const fetchLibraryState = useCallback(async () => {
+    if (currentUser && animefulldata?.mal_id) {
+      try {
+        const [watchRes, compRes] = await Promise.allSettled([
+          checkInWatchlist(currentUser.uid, animefulldata.mal_id),
+          checkInCompleted(currentUser.uid, animefulldata.mal_id)
+        ]);
+
+        if (watchRes.status === "fulfilled") {
+          setInWatchlist(Boolean(watchRes.value?.data));
+        } else {
+          console.error("Watchlist check error:", watchRes.reason);
         }
-      } else if (!currentUser && isMounted) {
-        setInWatchlist(false);
+
+        if (compRes.status === "fulfilled") {
+          setInCompleted(Boolean(compRes.value?.data));
+        } else {
+          console.error("Completed check error:", compRes.reason);
+        }
+      } catch (e) {
+        console.error("Library state check error:", e);
       }
-    };
-    fetchWatchlistState();
-    return () => { isMounted = false; };
+    } else if (!currentUser) {
+      setInWatchlist(false);
+      setInCompleted(false);
+    }
   }, [currentUser, animefulldata?.mal_id]);
+
+  useEffect(() => {
+    fetchLibraryState();
+  }, [fetchLibraryState]);
 
   const handleWatchlistClick = async () => {
     if (!currentUser) {
@@ -309,8 +343,8 @@ const Animeinfo = () => {
     
     if (!animefulldata) return;
 
-    setWatchlistLoading(true);
-    setWatchlistError("");
+    setActionLoading(true);
+    setLibraryError("");
     
     try {
       if (inWatchlist) {
@@ -322,16 +356,62 @@ const Animeinfo = () => {
           title: animefulldata.title,
           image: animefulldata.images?.webp?.large_image_url || animefulldata.banner_image || "",
           type: animefulldata.type,
-          score: animefulldata.score
+          score: animefulldata.score,
+          ...(Array.isArray(animefulldata.anilistRelations) && animefulldata.anilistRelations.length > 0
+            ? { anilistRelations: animefulldata.anilistRelations }
+            : {})
         };
+        // addToWatchlist atomically removes from Completed if present
         await addToWatchlist(currentUser.uid, animeData);
         setInWatchlist(true);
+        setInCompleted(false);
       }
     } catch (e) {
-      setWatchlistError("Failed to update watchlist.");
-      console.error(e);
+      console.error("Watchlist action error:", e);
+      setLibraryError(getFirestoreErrorMessage(e));
     } finally {
-      setWatchlistLoading(false);
+      setActionLoading(false);
+    }
+  };
+
+  const handleCompletedClick = async () => {
+    if (!currentUser) {
+      navigate("/login");
+      return;
+    }
+    
+    if (!animefulldata) return;
+
+    setActionLoading(true);
+    setLibraryError("");
+
+    try {
+      if (inCompleted) {
+        // Removing from completed restores the anime to Watchlist
+        await removeFromCompleted(currentUser.uid, animefulldata.mal_id, true);
+        setInCompleted(false);
+        setInWatchlist(true);
+      } else {
+        const animeData = {
+          animeId: animefulldata.mal_id,
+          title: animefulldata.title,
+          image: animefulldata.images?.webp?.large_image_url || animefulldata.banner_image || "",
+          type: animefulldata.type,
+          score: animefulldata.score,
+          ...(Array.isArray(animefulldata.anilistRelations) && animefulldata.anilistRelations.length > 0
+            ? { anilistRelations: animefulldata.anilistRelations }
+            : {})
+        };
+        // addToCompleted atomically removes from Watchlist
+        await addToCompleted(currentUser.uid, animeData);
+        setInCompleted(true);
+        setInWatchlist(false);
+      }
+    } catch (e) {
+      console.error("Completed action error:", e);
+      setLibraryError(getFirestoreErrorMessage(e));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -348,7 +428,10 @@ const Animeinfo = () => {
     title: animefulldata.title,
     image: animefulldata.images?.webp?.large_image_url || animefulldata.banner_image || "",
     type: animefulldata.type,
-    score: animefulldata.score
+    score: animefulldata.score,
+    ...(Array.isArray(animefulldata.anilistRelations) && animefulldata.anilistRelations.length > 0
+      ? { anilistRelations: animefulldata.anilistRelations }
+      : {})
   } : null;
 
   if (animedata_error && !animefulldata) {
@@ -393,18 +476,34 @@ const Animeinfo = () => {
               <button 
                 id="watchltr" 
                 onClick={handleWatchlistClick}
-                disabled={watchlistLoading}
+                disabled={actionLoading}
                 className={inWatchlist ? "saved" : ""}
+                title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
               >
-                {watchlistLoading ? "Loading..." : inWatchlist ? (
+                {actionLoading ? "..." : inWatchlist ? (
                   <><IoBookmarkOutline /> Added to Watchlist</>
                 ) : (
                   <><IoBookmarkOutline /> Add to Watchlist</>
                 )}
               </button>
+
+              <button
+                id="btn-completed"
+                onClick={handleCompletedClick}
+                disabled={actionLoading}
+                className={`completed-btn ${inCompleted ? "saved" : ""}`}
+                title={inCompleted ? "Completed (Click to return to Watchlist)" : "Mark as Completed"}
+              >
+                {actionLoading ? "..." : inCompleted ? (
+                  <><IoCheckmarkCircleOutline /> Completed</>
+                ) : (
+                  <><IoCheckmarkCircleOutline /> Mark Completed</>
+                )}
+              </button>
+
               <button id="tocollec" onClick={handleCollectionClick}>+ Add to Collection</button>
             </div>
-            {watchlistError && <p className="watchlist-error">{watchlistError}</p>}
+            {libraryError && <p className="watchlist-error">{libraryError}</p>}
           </div>
         </div>
       </section>
@@ -451,7 +550,10 @@ const Animeinfo = () => {
       {formattedAnimeData && (
         <CollectionModal 
           isOpen={isCollectionModalOpen} 
-          onClose={() => setIsCollectionModalOpen(false)} 
+          onClose={() => {
+            setIsCollectionModalOpen(false);
+            fetchLibraryState();
+          }} 
           user={currentUser} 
           animeData={formattedAnimeData} 
         />

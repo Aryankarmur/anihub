@@ -303,3 +303,17 @@
     padding: 80px 16px 16px 16px;
   }
 }
+
+/* System Pill Badge for Built-in Collections */
+.system-pill {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}

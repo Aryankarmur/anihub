@@ -1,33 +1,57 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { IoTrashOutline } from "react-icons/io5";
+/* eslint-disable react-hooks/set-state-in-effect -- existing subscription loading/reset behavior */
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import Card from "../component/Card";
-import SkeletonCard from "../component/SkeletonCard";
 import CollectionModal from "../component/CollectionModal";
 import EditCollectionModal from "../component/EditCollectionModal";
+import WatchlistSection from "../component/WatchlistSection";
+import CustomCollectionSection from "../component/CustomCollectionSection";
+import CompletedSection from "../component/CompletedSection";
+import UpNextSection from "../features/upNext/UpNextSection";
+import { useUpNextSuggestions } from "../features/upNext/useUpNextSuggestions";
+import {
+  SYSTEM_COLLECTION_UP_NEXT,
+  UP_NEXT_SEARCH_SCOPE,
+} from "../features/upNext/upNextService";
+import * as groupingFeatureGate from "../firebase/groupingFeatureGate";
+import {
+  COMPLETED_SEARCH_SCOPE,
+  WATCHLIST_SEARCH_SCOPE,
+  collectionSearchScope,
+  useLibrarySearchQueries,
+} from "../hooks/useLibrarySearchQueries";
+
+const isPresentationEnabled = (uid) => {
+  try {
+    if (typeof groupingFeatureGate.isGroupingPresentationEnabled === "function") {
+      return groupingFeatureGate.isGroupingPresentationEnabled(uid);
+    }
+  } catch {
+    // Fall back to isAnimeGroupingEnabled if mock does not define isGroupingPresentationEnabled
+  }
+  return Boolean(groupingFeatureGate.isAnimeGroupingEnabled);
+};
+
 import { 
   subscribeToWatchlist, 
   subscribeToCollections, 
-  subscribeToCollectionItems,
+  subscribeToCollectionItems, 
+  subscribeToCompleted,
   removeFromWatchlist,
   removeFromCollection,
-  deleteCollection
+  removeFromCompleted,
+  addToWatchlist,
+  addToCompleted,
+  deleteCollection,
+  getFirestoreErrorMessage,
+  inspectLegacyMigration,
+  migrateLegacyCompletedCollection,
+  SYSTEM_COLLECTION_COMPLETED
 } from "../firebase/firestore";
 import "../assets/css/MyLibrary.css";
 
-// Helper to map Firestore library data to the format Card.jsx expects
-const mapFirestoreToCardData = (item) => ({
-  mal_id: item.animeId,
-  title: item.title,
-  large_image_url: item.image,
-  score: item.score,
-  episodes: item.type, // Map the format/type to the episodes display slot
-});
-
 const MyLibrary = () => {
   const { currentUser } = useAuth();
-  const navigate = useNavigate();
 
   // Watchlist State
   const [watchlist, setWatchlist] = useState([]);
@@ -36,10 +60,21 @@ const MyLibrary = () => {
   // Collections State
   const [collections, setCollections] = useState([]);
   const [collectionsLoading, setCollectionsLoading] = useState(true);
+
+  // Completed State (Built-in Collection)
+  const [completedList, setCompletedList] = useState([]);
+  const [completedLoading, setCompletedLoading] = useState(true);
+
+  // Migration panel state
+  const [migrationAlert, setMigrationAlert] = useState(null);
+  const [migrationReport, setMigrationReport] = useState(null); // result of inspectLegacyMigration
+  const [migrationRunning, setMigrationRunning] = useState(false);
+  const [migrationResult, setMigrationResult] = useState(null); // result of the live run
   
   // Selected Collection State
   const [selectedCollectionId, setSelectedCollectionId] = useState(null);
   const [collectionItems, setCollectionItems] = useState([]);
+  const [collectionItemsScopeId, setCollectionItemsScopeId] = useState(null);
   const [itemsLoading, setItemsLoading] = useState(false);
 
   // Modal State
@@ -49,6 +84,12 @@ const MyLibrary = () => {
   // Presentation State
   const [showAllWatchlist, setShowAllWatchlist] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const { getSearchQuery, setSearchQuery } = useLibrarySearchQueries();
+  const upNext = useUpNextSuggestions({
+    watchlist,
+    completed: completedList,
+    isLoading: watchlistLoading || completedLoading,
+  });
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -69,7 +110,7 @@ const MyLibrary = () => {
         setWatchlist(data);
         setWatchlistLoading(false);
       },
-      (error) => {
+      () => {
         setWatchlistLoading(false);
       }
     );
@@ -88,7 +129,7 @@ const MyLibrary = () => {
         setCollections(data);
         setCollectionsLoading(false);
       },
-      (error) => {
+      () => {
         setCollectionsLoading(false);
       }
     );
@@ -96,30 +137,86 @@ const MyLibrary = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // 3. Subscribe to specific Collection Items when selected
+  // 3. Subscribe to Completed collection (Built-in)
   useEffect(() => {
-    if (!currentUser || !selectedCollectionId) {
-      setCollectionItems([]);
-      return;
-    }
+    if (!currentUser) return;
 
-    setItemsLoading(true);
-    const unsubscribe = subscribeToCollectionItems(
+    setCompletedLoading(true);
+    const unsubscribe = subscribeToCompleted(
       currentUser.uid,
-      selectedCollectionId,
       (data) => {
         data.sort((a, b) => (b.addedAt?.toMillis() || 0) - (a.addedAt?.toMillis() || 0));
-        setCollectionItems(data);
-        setItemsLoading(false);
+        setCompletedList(data);
+        setCompletedLoading(false);
       },
-      (error) => {
-        setItemsLoading(false);
+      () => {
+        setCompletedLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [currentUser, selectedCollectionId]);
+  }, [currentUser]);
 
+  // 4. Safe detection of legacy "Completed" custom collection
+  // NOTE: Automatic background migration is disabled per safety requirements.
+  // All original collections remain visible and preserved.
+  useEffect(() => {
+    if (!currentUser || collectionsLoading || collections.length === 0) {
+      setMigrationAlert(null);
+      return;
+    }
+
+    const legacyMatches = collections.filter(
+      (c) => c.name && c.name.trim().toLowerCase() === "completed" && !c._isMigratedLegacy
+    );
+
+    if (legacyMatches.length > 0) {
+      setMigrationAlert(
+        "Notice: Your original custom collection 'Completed' is accessible below under 'Completed (Custom)'. Automatic migration is paused for data safety. No anime records were deleted or modified."
+      );
+    } else {
+      setMigrationAlert(null);
+    }
+  }, [currentUser, collections, collectionsLoading]);
+
+  // 5. Subscribe to specific Collection Items when selected (custom collections only)
+  useEffect(() => {
+    if (
+      !currentUser
+      || !selectedCollectionId
+      || selectedCollectionId === SYSTEM_COLLECTION_COMPLETED
+      || selectedCollectionId === SYSTEM_COLLECTION_UP_NEXT
+    ) {
+      setCollectionItems([]);
+      setCollectionItemsScopeId(null);
+      return;
+    }
+
+    let active = true;
+    const subscribedCollectionId = selectedCollectionId;
+    setCollectionItems([]);
+    setCollectionItemsScopeId(subscribedCollectionId);
+    setItemsLoading(true);
+    const unsubscribe = subscribeToCollectionItems(
+      currentUser.uid,
+      subscribedCollectionId,
+      (data) => {
+        if (!active) return;
+        data.sort((a, b) => (b.addedAt?.toMillis() || 0) - (a.addedAt?.toMillis() || 0));
+        setCollectionItems(data);
+        setItemsLoading(false);
+      },
+      () => {
+        if (!active) return;
+        setItemsLoading(false);
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [currentUser, selectedCollectionId]);
 
   // Action Handlers
   const handleRemoveFromWatchlist = async (e, animeId) => {
@@ -128,7 +225,20 @@ const MyLibrary = () => {
     try {
       await removeFromWatchlist(currentUser.uid, animeId);
     } catch (error) {
-      alert("Failed to remove from watchlist.");
+      console.error("Failed to remove from watchlist:", error);
+      alert(getFirestoreErrorMessage(error));
+    }
+  };
+
+  const handleRemoveFromCompleted = async (e, animeId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      // Removing from Completed restores the anime to Watchlist
+      await removeFromCompleted(currentUser.uid, animeId, true);
+    } catch (error) {
+      console.error("Failed to remove from completed:", error);
+      alert(getFirestoreErrorMessage(error));
     }
   };
 
@@ -140,7 +250,35 @@ const MyLibrary = () => {
     try {
       await removeFromCollection(currentUser.uid, selectedCollectionId, animeId);
     } catch (error) {
-      alert("Failed to remove from collection.");
+      console.error("Failed to remove from collection:", error);
+      alert(getFirestoreErrorMessage(error));
+    }
+  };
+
+  const toSavedAnime = (anime) => ({
+    animeId: anime.animeId,
+    title: anime.title,
+    image: anime.image,
+    type: anime.type,
+    score: anime.score,
+    ...(Array.isArray(anime.anilistRelations)
+      ? { anilistRelations: anime.anilistRelations }
+      : {}),
+  });
+
+  const handleAddUpNextToWatchlist = async (anime) => {
+    try {
+      await addToWatchlist(currentUser.uid, toSavedAnime(anime));
+    } catch (error) {
+      throw new Error(getFirestoreErrorMessage(error), { cause: error });
+    }
+  };
+
+  const handleMarkUpNextCompleted = async (anime) => {
+    try {
+      await addToCompleted(currentUser.uid, toSavedAnime(anime));
+    } catch (error) {
+      throw new Error(getFirestoreErrorMessage(error), { cause: error });
     }
   };
 
@@ -155,7 +293,49 @@ const MyLibrary = () => {
       await deleteCollection(currentUser.uid, selectedCollectionId);
       setSelectedCollectionId(null);
     } catch (error) {
-      alert("Failed to delete collection.");
+      console.error("Failed to delete collection:", error);
+      alert(getFirestoreErrorMessage(error));
+    }
+  };
+
+  // Migration: inspect (dry-run, read-only)
+  const handleInspectMigration = async () => {
+    if (!currentUser) return;
+    setMigrationReport(null);
+    setMigrationResult(null);
+    setMigrationRunning(true);
+    try {
+      const report = await inspectLegacyMigration(currentUser.uid);
+      setMigrationReport(report);
+    } catch (err) {
+      console.error("inspectLegacyMigration error:", err);
+      setMigrationReport({ error: getFirestoreErrorMessage(err) });
+    } finally {
+      setMigrationRunning(false);
+    }
+  };
+
+  // Migration: live run (requires explicit user confirmation)
+  const handleRunMigration = async () => {
+    if (!currentUser || !migrationReport?.found) return;
+    const confirmed = window.confirm(
+      `This will copy ${migrationReport.missingCount} anime from your old custom Completed collection into the System Completed collection.\n\nNo existing data will be deleted or overwritten.\n\nProceed?`
+    );
+    if (!confirmed) return;
+
+    setMigrationRunning(true);
+    setMigrationResult(null);
+    try {
+      const result = await migrateLegacyCompletedCollection(currentUser.uid, { skipFlagCheck: true });
+      setMigrationResult(result);
+      // Refresh the inspection report to reflect the new destination state
+      const updatedReport = await inspectLegacyMigration(currentUser.uid);
+      setMigrationReport(updatedReport);
+    } catch (err) {
+      console.error("migrateLegacyCompletedCollection error:", err);
+      setMigrationResult({ success: false, error: getFirestoreErrorMessage(err) });
+    } finally {
+      setMigrationRunning(false);
     }
   };
 
@@ -174,13 +354,20 @@ const MyLibrary = () => {
     );
   }
 
+  // Only exclude legacy custom collections if they have been fully and verified migrated.
+  // Legacy collections are NEVER hidden solely because their name is "Completed".
+  const visibleCollections = collections.filter((c) => !c._isMigratedLegacy);
+
   // Find currently selected collection metadata
   const selectedCollection = collections.find(c => c.id === selectedCollectionId);
-
-  // Watchlist presentation limits
-  const displayLimit = isMobile ? 6 : 12;
-  const visibleWatchlist = showAllWatchlist ? watchlist : watchlist.slice(0, displayLimit);
-  const hasMoreWatchlist = watchlist.length > displayLimit;
+  const activeCollectionItems = collectionItemsScopeId === selectedCollectionId
+    ? collectionItems
+    : [];
+  const activeCollectionItemsLoading = itemsLoading
+    || (Boolean(selectedCollectionId)
+      && selectedCollectionId !== SYSTEM_COLLECTION_COMPLETED
+      && selectedCollectionId !== SYSTEM_COLLECTION_UP_NEXT
+      && collectionItemsScopeId !== selectedCollectionId);
 
   return (
     <div className="library-container">
@@ -190,52 +377,92 @@ const MyLibrary = () => {
       </div>
 
       {/* WATCHLIST SECTION */}
-      <div className="library-section">
-        <h2 className="section-title">Watchlist</h2>
-        
-        {watchlistLoading ? (
-          <div className="grid-wrapper">
-            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        ) : watchlist.length > 0 ? (
-          <>
-            <div className="grid-wrapper">
-              {visibleWatchlist.map(anime => (
-                <div className="library-card-wrapper" key={anime.id}>
-                  <button 
-                    className="remove-btn" 
-                    onClick={(e) => handleRemoveFromWatchlist(e, anime.id)}
-                    title="Remove from Watchlist"
-                  >
-                    <IoTrashOutline />
-                  </button>
-                  <Card animeInfo={mapFirestoreToCardData(anime)} />
-                </div>
-              ))}
-            </div>
-            {hasMoreWatchlist && (
-              <div className="show-more-container">
-                <button 
-                  className="show-more-btn"
-                  onClick={() => setShowAllWatchlist(!showAllWatchlist)}
-                >
-                  {showAllWatchlist ? "Show Less ↑" : "Show More ↓"}
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="library-empty-state">
-            <p>Your watchlist is empty.</p>
-            <p style={{fontSize: '0.9rem'}}>Add anime from the Anime Info page and they will appear here.</p>
-            <Link to="/catalog" className="explore-btn">Explore Anime</Link>
-          </div>
-        )}
-      </div>
+      <WatchlistSection
+        uid={currentUser.uid}
+        animeDocuments={watchlist}
+        isLoading={watchlistLoading}
+        isMobile={isMobile}
+        showAll={showAllWatchlist}
+        onToggleShowAll={() => setShowAllWatchlist((current) => !current)}
+        onRemoveAnime={handleRemoveFromWatchlist}
+        groupingEnabled={isPresentationEnabled(currentUser.uid)}
+        searchQuery={getSearchQuery(WATCHLIST_SEARCH_SCOPE)}
+        onSearchQueryChange={(query) => setSearchQuery(WATCHLIST_SEARCH_SCOPE, query)}
+      />
 
       {/* COLLECTIONS SECTION */}
       <div className="library-section">
         <h2 className="section-title">Collections</h2>
+
+        {migrationAlert && (
+          <div className="migration-alert" role="alert">
+            <div className="migration-alert-text">{migrationAlert}</div>
+            <div className="migration-alert-actions">
+              <button
+                className="migration-inspect-btn"
+                onClick={handleInspectMigration}
+                disabled={migrationRunning}
+              >
+                {migrationRunning && !migrationReport ? "Inspecting…" : "🔍 Inspect Migration"}
+              </button>
+            </div>
+
+            {/* Inspection Report */}
+            {migrationReport && (
+              <div className="migration-report">
+                {migrationReport.error ? (
+                  <p className="migration-report-error">Error: {migrationReport.error}</p>
+                ) : !migrationReport.found ? (
+                  <p className="migration-report-ok">✓ {migrationReport.message}</p>
+                ) : (
+                  <>
+                    <table className="migration-report-table">
+                      <tbody>
+                        <tr><td>Source collection ID</td><td><code>{migrationReport.collectionId}</code></td></tr>
+                        <tr><td>Source anime count</td><td>{migrationReport.sourceCount}</td></tr>
+                        <tr><td>Destination count (current)</td><td>{migrationReport.destinationCount}</td></tr>
+                        <tr><td>Items to copy</td><td><strong>{migrationReport.missingCount}</strong></td></tr>
+                        <tr><td>Already migrated</td><td>{migrationReport.alreadyMigratedCount}</td></tr>
+                        <tr><td>Items missing animeId field</td><td>{migrationReport.itemsWithNoAnimeId}</td></tr>
+                        <tr><td>Profile migration flag</td><td>{migrationReport.profileFlagSet ? "⚠ Set (was bypassed)" : "Not set"}</td></tr>
+                        <tr><td>Collection migration flag</td><td>{migrationReport.collectionFlagSet ? "⚠ Set (was bypassed)" : "Not set"}</td></tr>
+                      </tbody>
+                    </table>
+                    {migrationReport.missingCount > 0 ? (
+                      <div className="migration-report-items">
+                        <p><strong>Anime to be copied:</strong></p>
+                        <ul>
+                          {migrationReport.missingItems.map((item) => (
+                            <li key={item.animeId}>{item.title} <span className="migration-id">(ID: {item.animeId})</span></li>
+                          ))}
+                        </ul>
+                        <button
+                          className="migration-run-btn"
+                          onClick={handleRunMigration}
+                          disabled={migrationRunning}
+                        >
+                          {migrationRunning ? "Migrating…" : `▶ Run Migration (${migrationReport.missingCount} anime)`}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="migration-report-ok">✓ {migrationReport.message}</p>
+                    )}
+                  </>
+                )}
+
+                {/* Live migration result */}
+                {migrationResult && (
+                  <div className={`migration-live-result ${migrationResult.success ? 'success' : 'error'}`}>
+                    {migrationResult.success
+                      ? `✓ ${migrationResult.message}`
+                      : `✗ ${migrationResult.error}`
+                    }
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         
         {collectionsLoading ? (
           <div className="collections-nav">
@@ -249,26 +476,109 @@ const MyLibrary = () => {
             >
               + Create Collection
             </div>
-            {collections.map(col => (
-              <div 
-                key={col.id}
-                className={`collection-tab ${selectedCollectionId === col.id ? 'active' : ''}`}
-                onClick={() => setSelectedCollectionId(col.id === selectedCollectionId ? null : col.id)}
-              >
-                <span>{col.name}</span>
-                <span className="tab-count">Collection</span>
-              </div>
-            ))}
+
+            {/* Built-in Completed Collection Tab */}
+            <div 
+              className={`collection-tab ${selectedCollectionId === SYSTEM_COLLECTION_COMPLETED ? 'active' : ''}`}
+              onClick={() => setSelectedCollectionId(selectedCollectionId === SYSTEM_COLLECTION_COMPLETED ? null : SYSTEM_COLLECTION_COMPLETED)}
+            >
+              <span>Completed</span>
+              <span className="tab-count">{completedLoading ? "..." : `${completedList.length} Anime`}</span>
+            </div>
+
+            {/* Built-in derived Up Next Collection Tab */}
+            <div
+              className={`collection-tab ${selectedCollectionId === SYSTEM_COLLECTION_UP_NEXT ? 'active' : ''}`}
+              onClick={() => setSelectedCollectionId(
+                selectedCollectionId === SYSTEM_COLLECTION_UP_NEXT ? null : SYSTEM_COLLECTION_UP_NEXT
+              )}
+            >
+              <span>Up Next</span>
+              <span className="tab-count">
+                {upNext.isLoading ? "..." : `${upNext.suggestions.length} Suggestion${upNext.suggestions.length === 1 ? "" : "s"}`}
+              </span>
+            </div>
+
+            {/* Custom Collection Tabs */}
+            {visibleCollections.map(col => {
+              const isLegacyCompleted = col.name && col.name.trim().toLowerCase() === "completed";
+              return (
+                <div 
+                  key={col.id}
+                  className={`collection-tab ${selectedCollectionId === col.id ? 'active' : ''}`}
+                  onClick={() => setSelectedCollectionId(col.id === selectedCollectionId ? null : col.id)}
+                >
+                  <span>{col.name}{isLegacyCompleted ? " (Custom)" : ""}</span>
+                  <span className="tab-count">{isLegacyCompleted ? "Custom Collection" : "Collection"}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* ACTIVE COLLECTION VIEW */}
-        {selectedCollectionId && selectedCollection && (
+        {selectedCollectionId === SYSTEM_COLLECTION_COMPLETED ? (
           <div className="active-collection-view">
             <div className="active-collection-header">
               <div className="active-collection-info">
-                <h2>{selectedCollection.name}</h2>
+                <h2>Completed</h2>
+                <p>Anime you have finished watching.</p>
+              </div>
+              <div className="active-collection-badge">
+                <span className="built-in-badge">Built-in Collection</span>
+              </div>
+            </div>
+
+            <CompletedSection
+              uid={currentUser.uid}
+              animeDocuments={completedList}
+              isLoading={completedLoading}
+              onRemoveAnime={handleRemoveFromCompleted}
+              groupingEnabled={isPresentationEnabled(currentUser.uid)}
+              searchQuery={getSearchQuery(COMPLETED_SEARCH_SCOPE)}
+              onSearchQueryChange={(query) => setSearchQuery(COMPLETED_SEARCH_SCOPE, query)}
+            />
+          </div>
+        ) : selectedCollectionId === SYSTEM_COLLECTION_UP_NEXT ? (
+          <div className="active-collection-view">
+            <div className="active-collection-header">
+              <div className="active-collection-info">
+                <h2>Up Next</h2>
+                <p>Verified direct sequels derived from your Watchlist and Completed anime.</p>
+              </div>
+              <div className="active-collection-badge">
+                <span className="built-in-badge">Automatic Collection</span>
+              </div>
+            </div>
+
+            <UpNextSection
+              suggestions={upNext.suggestions}
+              isLoading={upNext.isLoading}
+              error={upNext.error}
+              isDiscovering={upNext.isDiscovering}
+              discoveryMessage={upNext.discoveryMessage}
+              discoveryError={upNext.discoveryError}
+              onDiscoverSequels={upNext.discoverSequels}
+              searchQuery={getSearchQuery(UP_NEXT_SEARCH_SCOPE)}
+              onSearchQueryChange={(query) => setSearchQuery(UP_NEXT_SEARCH_SCOPE, query)}
+              onAddToWatchlist={handleAddUpNextToWatchlist}
+              onMarkCompleted={handleMarkUpNextCompleted}
+            />
+          </div>
+        ) : selectedCollectionId && selectedCollection ? (
+          <div className="active-collection-view">
+            <div className="active-collection-header">
+              <div className="active-collection-info">
+                <h2>
+                  {selectedCollection.name}
+                  {selectedCollection.name && selectedCollection.name.trim().toLowerCase() === "completed" ? " (Custom Collection)" : ""}
+                </h2>
                 {selectedCollection.description && <p>{selectedCollection.description}</p>}
+                {selectedCollection.name && selectedCollection.name.trim().toLowerCase() === "completed" && (
+                  <p style={{ color: "var(--accent)", fontSize: "0.9rem", marginTop: "4px" }}>
+                    Original custom collection. All of your anime records are preserved here.
+                  </p>
+                )}
               </div>
               <div className="active-collection-actions">
                 <button className="edit-collection-btn" onClick={() => setIsEditModalOpen(true)}>
@@ -279,38 +589,26 @@ const MyLibrary = () => {
                 </button>
               </div>
             </div>
-            
-            {itemsLoading ? (
-              <div className="grid-wrapper">
-                {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
-              </div>
-            ) : collectionItems.length > 0 ? (
-              <div className="grid-wrapper">
-                {collectionItems.map(anime => (
-                  <div className="library-card-wrapper" key={anime.id}>
-                    <button 
-                      className="remove-btn" 
-                      onClick={(e) => handleRemoveFromCollection(e, anime.id)}
-                      title="Remove from Collection"
-                    >
-                      <IoTrashOutline />
-                    </button>
-                    <Card animeInfo={mapFirestoreToCardData(anime)} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="library-empty-state">
-                <p>This collection is empty.</p>
-                <p style={{fontSize: '0.9rem'}}>Add anime from an Anime Info page.</p>
-              </div>
-            )}
+
+            <CustomCollectionSection
+              uid={currentUser.uid}
+              collectionId={selectedCollectionId}
+              animeDocuments={activeCollectionItems}
+              isLoading={activeCollectionItemsLoading}
+              onRemoveAnime={handleRemoveFromCollection}
+              groupingEnabled={isPresentationEnabled(currentUser.uid)}
+              searchQuery={getSearchQuery(collectionSearchScope(selectedCollectionId))}
+              onSearchQueryChange={(query) => (
+                setSearchQuery(collectionSearchScope(selectedCollectionId), query)
+              )}
+              searchLabel={selectedCollection.name || "Collection"}
+            />
           </div>
-        )}
+        ) : null}
         
-        {!selectedCollectionId && collections.length === 0 && !collectionsLoading && (
+        {!selectedCollectionId && visibleCollections.length === 0 && !collectionsLoading && (
           <div className="library-empty-state">
-            <p>You haven't created any collections yet.</p>
+            <p>You haven't created any custom collections yet.</p>
             <button className="explore-btn" onClick={() => setIsModalOpen(true)}>
               + Create Collection
             </button>

@@ -6,7 +6,13 @@ import {
   createCollection, 
   checkInCollection, 
   addToCollection, 
-  removeFromCollection 
+  removeFromCollection,
+  checkInCompleted,
+  addToCompleted,
+  removeFromCompleted,
+  isReservedCollectionName,
+  getFirestoreErrorMessage,
+  SYSTEM_COLLECTION_COMPLETED
 } from "../firebase/firestore";
 import "../assets/css/CollectionModal.css";
 
@@ -39,19 +45,51 @@ const CollectionModal = ({ isOpen, onClose, user, animeData }) => {
       const { data: cols, error: fetchErr } = await getCollections(user.uid);
       if (fetchErr) throw fetchErr;
 
+      // Only filter out legacy manual completed collections that have been confirmed migrated
+      const customCols = (cols || []).filter((c) => !c._isMigratedLegacy);
+
       // Check if anime exists in each collection (if animeData is provided)
-      const enrichedCols = animeData ? await Promise.all(
-        cols.map(async (col) => {
-          const { data: inCol } = await checkInCollection(user.uid, col.id, animeData.animeId);
-          return { ...col, inCollection: inCol };
-        })
-      ) : cols;
+      let enrichedCols = [];
+      if (animeData) {
+        // 1. Check Completed built-in collection status safely
+        let inCompleted = false;
+        try {
+          const compRes = await checkInCompleted(user.uid, animeData.animeId);
+          inCompleted = Boolean(compRes?.data);
+        } catch (compErr) {
+          console.error("Error checking inCompleted in modal:", compErr);
+        }
+
+        const completedBuiltIn = {
+          id: SYSTEM_COLLECTION_COMPLETED,
+          name: "Completed",
+          description: "Built-in collection (moves from Watchlist to Completed)",
+          isSystem: true,
+          inCollection: inCompleted
+        };
+
+        // 2. Check custom collections
+        const enrichedCustom = await Promise.all(
+          customCols.map(async (col) => {
+            try {
+              const { data: inCol } = await checkInCollection(user.uid, col.id, animeData.animeId);
+              return { ...col, inCollection: Boolean(inCol) };
+            } catch (err) {
+              console.error(`Error checking inCollection for ${col.id}:`, err);
+              return { ...col, inCollection: false };
+            }
+          })
+        );
+
+        enrichedCols = [completedBuiltIn, ...enrichedCustom];
+      } else {
+        enrichedCols = customCols;
+      }
       
-      // Sort collections: recently created first or alphabetically. We'll leave as returned (usually document ID or timestamp).
       setCollections(enrichedCols);
     } catch (err) {
-      console.error(err);
-      setError("Failed to load collections.");
+      console.error("fetchCollections error:", err);
+      setError(getFirestoreErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -62,10 +100,20 @@ const CollectionModal = ({ isOpen, onClose, user, animeData }) => {
     setError("");
     
     try {
-      if (currentlyInCollection) {
-        await removeFromCollection(user.uid, collectionId, animeData.animeId);
+      if (collectionId === SYSTEM_COLLECTION_COMPLETED) {
+        if (currentlyInCollection) {
+          // Remove from Completed (restores to Watchlist)
+          await removeFromCompleted(user.uid, animeData.animeId, true);
+        } else {
+          // Add to Completed (removes from Watchlist)
+          await addToCompleted(user.uid, animeData);
+        }
       } else {
-        await addToCollection(user.uid, collectionId, animeData);
+        if (currentlyInCollection) {
+          await removeFromCollection(user.uid, collectionId, animeData.animeId);
+        } else {
+          await addToCollection(user.uid, collectionId, animeData);
+        }
       }
       
       // Update local state to immediately reflect the change
@@ -75,8 +123,8 @@ const CollectionModal = ({ isOpen, onClose, user, animeData }) => {
         )
       );
     } catch (err) {
-      console.error(err);
-      setError("Failed to update collection.");
+      console.error("handleToggleCollection error:", err);
+      setError(getFirestoreErrorMessage(err));
     } finally {
       setOperationLoading((prev) => ({ ...prev, [collectionId]: false }));
     }
@@ -93,12 +141,16 @@ const CollectionModal = ({ isOpen, onClose, user, animeData }) => {
       setError("Collection name must be 50 characters or less.");
       return;
     }
+    if (isReservedCollectionName(trimmedName)) {
+      setError(`"${trimmedName}" is a reserved system collection name.`);
+      return;
+    }
 
     setIsCreating(true);
     setError("");
 
     try {
-      const { id } = await createCollection(user.uid, {
+      await createCollection(user.uid, {
         name: trimmedName,
         description: newDesc.trim()
       });
@@ -117,7 +169,7 @@ const CollectionModal = ({ isOpen, onClose, user, animeData }) => {
       
     } catch (err) {
       console.error(err);
-      setError("Failed to create collection.");
+      setError(err.message || "Failed to create collection.");
     } finally {
       setIsCreating(false);
     }
@@ -147,27 +199,38 @@ const CollectionModal = ({ isOpen, onClose, user, animeData }) => {
                   {collections.length === 0 ? (
                     <div className="empty-state">No collections found.</div>
                   ) : (
-                    collections.map(col => (
-                      <div className="collection-item" key={col.id}>
-                        <div className="collection-info">
-                          <span className="collection-name" title={col.name}>{col.name}</span>
-                          {col.description && (
-                            <span className="collection-desc" title={col.description}>{col.description}</span>
-                          )}
+                    collections.map(col => {
+                      const isLegacyCompleted = !col.isSystem && col.name && col.name.trim().toLowerCase() === "completed";
+                      return (
+                        <div className="collection-item" key={col.id}>
+                          <div className="collection-info">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span className="collection-name" title={col.name}>
+                                {col.name}{isLegacyCompleted ? " (Custom)" : ""}
+                              </span>
+                              {col.isSystem && <span className="system-pill">Built-in</span>}
+                              {isLegacyCompleted && (
+                                <span className="system-pill" style={{ background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', borderColor: 'rgba(251, 191, 36, 0.35)' }}>Custom</span>
+                              )}
+                            </div>
+                            {col.description && (
+                              <span className="collection-desc" title={col.description}>{col.description}</span>
+                            )}
+                          </div>
+                          <div className="collection-action">
+                            <button 
+                              className={`collection-btn ${col.inCollection ? "added" : ""}`}
+                              onClick={() => handleToggleCollection(col.id, col.inCollection)}
+                              disabled={operationLoading[col.id]}
+                            >
+                              {operationLoading[col.id] 
+                                ? "..." 
+                                : col.inCollection ? <><IoCheckmark /> Added</> : "Add"}
+                            </button>
+                          </div>
                         </div>
-                        <div className="collection-action">
-                          <button 
-                            className={`collection-btn ${col.inCollection ? "added" : ""}`}
-                            onClick={() => handleToggleCollection(col.id, col.inCollection)}
-                            disabled={operationLoading[col.id]}
-                          >
-                            {operationLoading[col.id] 
-                              ? "..." 
-                              : col.inCollection ? <><IoCheckmark /> Added</> : "Add"}
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               )}

@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.firebase/
+preview-*.png
 
 # Editor directories and files
 .vscode/*
@@ -23,7 +25,15 @@ dist-ssr
 *.sln
 *.sw?
 
-.env
+.env*
+!.env*.example
+
+# Local credentials
+*-firebase-adminsdk-*.json
+service-account*.json
+serviceAccount*.json
+*.pem
+*.key
 
 # API Test/Audit Artifacts
 curl*.txt
