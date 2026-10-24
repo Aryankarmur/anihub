@@ -1,4 +1,5 @@
-export const LOCALHOST_GROUPING_PROJECT_ID = "anihub-73f72";
+export const ANIHUB_FIREBASE_PROJECT_ID = "anihub-73f72";
+export const LOCALHOST_GROUPING_PROJECT_ID = ANIHUB_FIREBASE_PROJECT_ID;
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
@@ -24,4 +25,3 @@ export const evaluateLocalhostGroupingAccess = ({
     && normalizedAllowedUid.length > 0
     && normalizedAllowedUid === normalizedActiveUid;
 };
-

@@ -1,16 +1,8 @@
 import { configuredFirebaseProjectId, isIsolatedFirebasePreview } from "./firebaseConfig";
-import { evaluateLocalhostGroupingAccess } from "./localGroupingDevelopment";
 import {
-  DEFAULT_PRODUCTION_CAPABILITIES,
-  getProductionCapabilities,
-  hashUidToPercent,
-  isUserEligibleForCanary,
-  resolveProductionCapabilities,
-  setProductionRemoteConfig,
-  setProductionRemoteConfigError,
-  setProductionActiveUser,
-  resetProductionActivation,
-} from "./productionActivation";
+  ANIHUB_FIREBASE_PROJECT_ID,
+  evaluateLocalhostGroupingAccess,
+} from "./localGroupingDevelopment";
 
 /**
  * Pure capability evaluator.
@@ -65,6 +57,44 @@ const getEnvironment = () => (
   (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : {}
 );
 
+/**
+ * Production grouping is an authenticated AniHub capability, not a rollout cohort.
+ * Keeping this evaluator pure makes it straightforward to verify that arbitrary
+ * existing and future UIDs receive identical capabilities without network state.
+ */
+export const evaluateProductionGroupingAccess = ({
+  isProduction = false,
+  projectId = "",
+  activeUid = "",
+} = {}) => {
+  const authenticated = typeof activeUid === "string" && activeUid.trim().length > 0;
+  const enabled = isProduction === true
+    && projectId === ANIHUB_FIREBASE_PROJECT_ID
+    && authenticated;
+
+  return {
+    dataCompatibility: true,
+    presentation: enabled,
+    autoReconciliation: enabled,
+  };
+};
+
+const getProductionGroupingAccess = (activeUid) => {
+  const env = getEnvironment();
+  return evaluateProductionGroupingAccess({
+    isProduction: env.PROD === true,
+    projectId: configuredFirebaseProjectId,
+    activeUid,
+  });
+};
+
+const getTestOverride = (capability) => {
+  const env = getEnvironment();
+  if (env.MODE !== "test" && env.MODE !== "grouping-preview") return undefined;
+  const value = runtimeOverrides?.[capability];
+  return typeof value === "boolean" ? value : undefined;
+};
+
 export const isLocalhostGroupingDevelopmentEnabled = (activeUid) => {
   const env = getEnvironment();
   const hostname = typeof globalThis.location?.hostname === "string"
@@ -97,34 +127,20 @@ export const isAnimeGroupingEnabled = evaluateAnimeGroupingGate({
 });
 
 export const isGroupingDataCompatibilityEnabled = (activeUid) => {
-  if (runtimeOverrides && typeof runtimeOverrides.dataCompatibility === "boolean") {
-    return runtimeOverrides.dataCompatibility;
-  }
-  const env = (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : {};
-  // Production cleanup compatibility is deliberately not remotely or
-  // environmentally disableable. It is required to safely move/delete data
-  // created while presentation or reconciliation was enabled.
-  if (env.PROD === true) {
-    return getProductionCapabilities().dataCompatibility;
-  }
-  if (env.VITE_ENABLE_GROUPING_DATA_COMPATIBILITY === "false") {
-    return false;
-  }
-  if (isIsolatedFirebasePreview || Boolean(isAnimeGroupingEnabled)) {
-    return true;
-  }
-  if (
-    isLocalhostGroupingDevelopmentEnabled(activeUid)
-    && env.VITE_ENABLE_GROUPING_DATA_COMPATIBILITY === "true"
-  ) return true;
-  return getProductionCapabilities().dataCompatibility;
+  void activeUid;
+  // Existing grouped data must always remain safe to move or delete, even when
+  // presentation/reconciliation are unavailable in an unsupported environment.
+  return true;
 };
 
 export const isGroupingPresentationEnabled = (activeUid) => {
-  if (runtimeOverrides && typeof runtimeOverrides.presentation === "boolean") {
-    return runtimeOverrides.presentation;
+  const override = getTestOverride("presentation");
+  if (override !== undefined) return override;
+
+  const env = getEnvironment();
+  if (env.PROD === true) {
+    return getProductionGroupingAccess(activeUid).presentation;
   }
-  const env = (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : {};
   if (env.VITE_ENABLE_GROUPING_PRESENTATION === "false") {
     return false;
   }
@@ -135,14 +151,17 @@ export const isGroupingPresentationEnabled = (activeUid) => {
     isLocalhostGroupingDevelopmentEnabled(activeUid)
     && env.VITE_ENABLE_GROUPING_PRESENTATION === "true"
   ) return true;
-  return getProductionCapabilities().presentation;
+  return false;
 };
 
 export const isAutomaticReconciliationEnabled = (activeUid) => {
-  if (runtimeOverrides && typeof runtimeOverrides.autoReconciliation === "boolean") {
-    return runtimeOverrides.autoReconciliation;
+  const override = getTestOverride("autoReconciliation");
+  if (override !== undefined) return override;
+
+  const env = getEnvironment();
+  if (env.PROD === true) {
+    return getProductionGroupingAccess(activeUid).autoReconciliation;
   }
-  const env = (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : {};
   if (env.VITE_ENABLE_AUTOMATIC_GROUPING === "false") {
     return false;
   }
@@ -153,20 +172,7 @@ export const isAutomaticReconciliationEnabled = (activeUid) => {
     isLocalhostGroupingDevelopmentEnabled(activeUid)
     && env.VITE_ENABLE_AUTOMATIC_GROUPING === "true"
   ) return true;
-  return getProductionCapabilities().autoReconciliation;
-};
-
-// Re-export production activation helpers
-export {
-  DEFAULT_PRODUCTION_CAPABILITIES,
-  hashUidToPercent,
-  isUserEligibleForCanary,
-  resolveProductionCapabilities,
-  setProductionRemoteConfig,
-  setProductionRemoteConfigError,
-  setProductionActiveUser,
-  resetProductionActivation,
-  getProductionCapabilities,
+  return false;
 };
 
 // Compatibility aliases for the approved Phase D Watchlist integration.
