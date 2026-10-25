@@ -29,6 +29,7 @@
   display: flex;
   align-items: flex-end;
   gap: var(--space-6);
+  min-width: 0;
 }
 
 .anime-info .img-div {
@@ -46,6 +47,8 @@
 
 .anime-info .info-div {
   flex: 1;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -60,6 +63,7 @@
   color: var(--text-0);
   text-shadow: 0 4px 12px rgba(0,0,0,0.5);
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .meta-row {
@@ -83,7 +87,9 @@
 
 .anime-info .info-div .btns {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
+  max-width: 100%;
   margin-top: var(--space-2);
 }
 
@@ -91,6 +97,8 @@
   background: var(--accent);
   color: white;
   padding: 10px 20px;
+  min-width: 0;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   font-weight: 600;
   display: flex;
@@ -210,7 +218,9 @@
 }
 
 .anime-details nav ul li a {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: 8px 20px;
   background: var(--bg-1);
   color: var(--text-1);
@@ -539,5 +549,16 @@
   
   .recommend-animes .card-link {
     flex: 0 0 130px;
+  }
+}
+
+@media (max-width: 480px) {
+  .anime-info .info-div .btns {
+    width: 100%;
+  }
+
+  .anime-info .info-div .btns button {
+    flex: 1 1 150px;
+    justify-content: center;
   }
 }

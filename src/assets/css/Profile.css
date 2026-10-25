@@ -48,6 +48,7 @@
   margin: 0;
   color: var(--text-2);
   font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .profile-section {
@@ -193,6 +194,7 @@
 
 .edit-input {
   width: 100%;
+  min-height: 44px;
   padding: 12px 16px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--bg-3);
@@ -217,6 +219,7 @@
 .edit-btn {
   flex: 1;
   padding: 10px;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   font-weight: 600;
   cursor: pointer;
@@ -246,6 +249,14 @@
 
 .edit-btn.cancel:hover {
   background: var(--bg-2);
+}
+
+.input-group > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
 }
 
 .message {

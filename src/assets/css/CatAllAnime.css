@@ -1,4 +1,7 @@
 .anime-main-div {
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
     padding-block: 90px;
 }
 .anime-main-div h2{
@@ -31,7 +34,7 @@
 
 .anime-main-div .pagination button {
   min-width: 80px;
-  height: 40px;
+  height: 44px;
   padding: 0 16px;
   border-radius: var(--radius-md);
   background: var(--bg-1);
@@ -75,7 +78,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  height: 44px;
   padding: 0 20px;
   background: var(--accent);
   color: #ffffff;
@@ -94,12 +97,12 @@
   }
   .anime-main-div .pagination button {
     min-width: 65px;
-    height: 36px;
+    height: 44px;
     padding: 0 10px;
     font-size: 0.85rem;
   }
   .anime-main-div .pagination .page-indicator {
-    height: 36px;
+    height: 44px;
     padding: 0 14px;
     font-size: 0.85rem;
   }

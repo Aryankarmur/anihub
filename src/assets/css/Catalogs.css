@@ -49,6 +49,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-height: 44px;
   cursor: pointer;
   font-weight: 600;
   font-size: 0.95rem;
@@ -79,7 +80,9 @@
   font-size: 0.85rem;
   font-weight: 500;
   transition: var(--transition);
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 .catalog_section .sideBar .dropdown_items label:hover {
@@ -99,6 +102,8 @@
 /* For selects */
 .catalog_section .sideBar .dropdown_items select {
   width: 100%;
+  height: 44px;
+  min-height: 44px;
   background: var(--bg-3);
   color: var(--text-0);
   border: 1px solid var(--bg-3);
@@ -167,6 +172,8 @@
   background: var(--bg-1);
   border-radius: var(--radius-lg);
   border: 1px solid var(--bg-3);
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .catalog_section .content .topBar h3 {
@@ -234,8 +241,8 @@
 }
 
 .catalog_section .content .pagination button {
-  min-width: 40px;
-  height: 40px;
+  min-width: 44px;
+  height: 44px;
   padding: 0 12px;
   border-radius: var(--radius-md);
   background: var(--bg-1);
@@ -300,7 +307,7 @@
   align-items: center;
   justify-content: center;
   min-width: 32px;
-  height: 40px;
+  height: 44px;
   color: var(--text-2);
   font-weight: 600;
   letter-spacing: 2px;
@@ -338,15 +345,15 @@
     gap: 4px;
   }
   .catalog_section .content .pagination button {
-    min-width: 34px;
-    height: 36px;
+    min-width: 44px;
+    height: 44px;
     padding: 0 6px;
     font-size: 0.85rem;
     border-radius: var(--radius-sm);
   }
   .catalog_section .content .pagination button:first-child,
   .catalog_section .content .pagination button:last-child {
-    min-width: 65px;
+    min-width: 52px;
     font-size: 0.85rem;
   }
   .catalog_section .content .pagination span {
@@ -356,11 +363,11 @@
 
 @media (max-width: 360px) {
   .catalog_section .content .pagination button {
-    min-width: 30px;
+    min-width: 44px;
     padding: 0 4px;
   }
   .catalog_section .content .pagination button:first-child,
   .catalog_section .content .pagination button:last-child {
-    min-width: 55px;
+    min-width: 52px;
   }
 }

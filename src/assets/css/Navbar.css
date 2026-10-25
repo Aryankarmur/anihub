@@ -5,6 +5,13 @@ nav {
   width: 100%;
 }
 
+#root > nav {
+  border-bottom: 1px solid var(--bg-3);
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
 nav section {
   height: 64px;
   width: 100%;
@@ -14,14 +21,15 @@ nav section {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(10, 10, 15, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--bg-3);
+  background: transparent;
   transition: var(--transition);
 }
 
 nav .logo a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  white-space: nowrap;
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 1.5rem;
@@ -32,6 +40,10 @@ nav .logo a {
 
 nav .logo a .accent {
   color: var(--accent);
+}
+
+nav .logo {
+  flex: 0 0 auto;
 }
 
 nav .menu {
@@ -51,6 +63,9 @@ nav .menu ul {
 }
 
 nav .menu ul li a:not(.nav-auth-btn) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--text-1);
   font-weight: 500;
   transition: var(--transition);
@@ -197,8 +212,8 @@ nav .menu .search_status {
 }
 
 .menu-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -245,7 +260,10 @@ nav .menu .search_status {
   color: var(--text-1);
   font-size: 1.1rem;
   font-weight: 500;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: var(--space-2);
   transition: var(--transition);
 }
@@ -273,6 +291,7 @@ nav .menu .search_status {
 
 /* Authentication Navbar Styles */
 .nav-auth-btn {
+  min-height: 44px;
   padding: 8px 16px;
   border-radius: var(--radius-pill);
   font-weight: 600;
@@ -316,6 +335,8 @@ nav .menu .search_status {
 }
 
 .user-indicator {
+  align-items: center;
+  min-height: 44px;
   color: var(--accent);
   font-weight: 600;
   font-size: 0.95rem;
@@ -324,7 +345,7 @@ nav .menu .search_status {
   border-radius: var(--radius-pill);
   user-select: none;
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
   transition: var(--transition);
 }
 
@@ -340,7 +361,7 @@ nav .menu .search_status {
 /* Desktop-specific Auth Button Proportions */
 @media (min-width: 769px) {
   .nav-auth-btn {
-    height: 38px;
+    height: 44px;
     padding: 0 12px;
   }
   

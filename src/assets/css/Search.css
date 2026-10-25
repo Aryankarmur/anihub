@@ -64,8 +64,8 @@
 }
 
 .pages button {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-pill);
   background: var(--bg-1);
   color: var(--text-0);

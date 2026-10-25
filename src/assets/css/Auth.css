@@ -71,6 +71,7 @@
   border: 1px solid var(--bg-3);
   color: var(--text-0);
   padding: 12px 14px;
+  min-height: 44px;
   border-radius: var(--radius-md);
   outline: none;
   font-family: inherit;
@@ -117,6 +118,9 @@
 }
 
 .auth-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;

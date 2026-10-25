@@ -82,25 +82,37 @@
 
 .slider-indicators {
   position: absolute;
-  bottom: 20px;
+  bottom: 3px;
   left: 0;
   width: 100%;
   display: flex;
   justify-content: center;
-  gap: 8px;
+  gap: 0;
   z-index: 10;
 }
 
 .indicator {
+  position: relative;
+  width: 40px;
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.indicator::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.4);
-  cursor: pointer;
+  content: "";
+  transform: translate(-50%, -50%);
   transition: background-color 0.3s ease;
 }
 
-.indicator.active {
+.indicator.active::before {
   background: var(--accent, #fff);
 }
 

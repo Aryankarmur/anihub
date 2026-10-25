@@ -62,7 +62,7 @@
   width: 100%;
   min-width: 0;
   min-height: 44px;
-  padding: 10px 44px 10px 42px;
+  padding: 10px 52px 10px 42px;
   border: 1px solid var(--bg-3);
   border-radius: var(--radius-pill);
   background: var(--bg-1);
@@ -98,12 +98,12 @@
 
 .library-search-clear {
   position: absolute;
-  right: 7px;
+  right: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -185,7 +185,7 @@
   justify-content: center;
   gap: 7px;
   flex: 0 0 auto;
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 16px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-pill);
@@ -213,7 +213,7 @@
   justify-content: center;
   gap: 7px;
   flex: 0 0 auto;
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 15px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-pill);
@@ -418,7 +418,7 @@
   justify-content: center;
   gap: 5px;
   min-width: 0;
-  min-height: 38px;
+  min-height: 44px;
   padding: 7px 8px;
   border: 1px solid rgba(124, 92, 255, 0.4);
   border-radius: var(--radius-md);
@@ -481,10 +481,10 @@
 
 .remove-btn {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 32px;
-  height: 32px;
+  top: 6px;
+  right: 6px;
+  width: 44px;
+  height: 44px;
   background: rgba(10, 10, 15, 0.8);
   border: 1px solid var(--bg-3);
   border-radius: var(--radius-pill);
@@ -582,6 +582,15 @@
   border: 1px solid var(--bg-3);
 }
 
+.active-collection-info {
+  min-width: 0;
+}
+
+.active-collection-info h2,
+.active-collection-info p {
+  overflow-wrap: anywhere;
+}
+
 .active-collection-info h2 {
   margin: 0 0 8px 0;
   color: var(--text-0);
@@ -605,6 +614,7 @@
   border: 1px solid var(--bg-3);
   color: var(--text-0);
   padding: 8px 16px;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   font-weight: 600;
   font-size: 0.9rem;
@@ -622,6 +632,7 @@
   border: 1px solid var(--danger);
   color: var(--danger);
   padding: 8px 16px;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   font-weight: 600;
   font-size: 0.9rem;
@@ -654,6 +665,10 @@
 }
 
 .library-empty-state .explore-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   background: var(--accent);
   color: white;
   padding: 10px 24px;
@@ -739,15 +754,46 @@
 
   .watchlist-section-heading {
     align-items: stretch;
+    flex-direction: column;
   }
 
+  .auto-grouping-toolbar {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+  }
+
+  .watchlist-organize-btn,
   .watchlist-create-group-btn {
-    min-height: 38px;
+    width: 100%;
+    min-height: 44px;
     padding-inline: 12px;
-    font-size: 0.82rem;
+    font-size: 0.75rem;
   }
 
+  .watchlist-section-heading .auto-grouping-toolbar,
+  .collection-grouping-toolbar {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  .watchlist-section-heading .auto-grouping-toolbar .watchlist-organize-btn,
+  .watchlist-section-heading .auto-grouping-toolbar .watchlist-create-group-btn,
+  .collection-grouping-toolbar .watchlist-organize-btn,
   .collection-grouping-toolbar .watchlist-create-group-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    padding-inline: 8px;
+  }
+
+  .active-collection-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .edit-collection-btn,
+  .delete-collection-btn {
     width: 100%;
   }
 
@@ -781,6 +827,7 @@
   color: var(--accent);
   border: 1px dashed var(--accent);
   padding: 10px 24px;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   font-weight: 600;
   cursor: pointer;
@@ -831,6 +878,7 @@
   border: 1px solid var(--accent);
   color: var(--accent);
   padding: 6px 16px;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   font-size: 0.85rem;
   font-weight: 600;
@@ -907,6 +955,7 @@
   border: none;
   color: white;
   padding: 8px 20px;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   font-size: 0.9rem;
   font-weight: 600;
@@ -945,4 +994,15 @@
   background: rgba(248, 113, 113, 0.1);
   color: var(--danger);
   border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+@media (max-width: 480px) {
+  .migration-report {
+    overflow-x: auto;
+  }
+
+  .migration-report-table td:first-child {
+    min-width: 0;
+    white-space: normal;
+  }
 }

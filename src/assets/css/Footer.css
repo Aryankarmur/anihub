@@ -34,6 +34,9 @@
 }
 
 .footer-logo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-family: 'Outfit', sans-serif;
   font-size: 1.75rem;
   font-weight: 700;
@@ -70,6 +73,9 @@
 }
 
 .footer-text a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--accent);
   text-decoration: none;
   transition: var(--transition);
@@ -95,7 +101,10 @@
   text-decoration: none;
   transition: var(--transition);
   font-size: 0.95rem;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
   background: none;
   border: none;
   padding: 0;

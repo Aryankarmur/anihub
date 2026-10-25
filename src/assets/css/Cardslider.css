@@ -33,6 +33,9 @@
 }
 
 .slider_main .header .see a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   transition: var(--transition);
 }
 
